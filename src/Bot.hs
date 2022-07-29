@@ -10,10 +10,18 @@ import Network.HTTP.Client.Internal (ResponseTimeout (ResponseTimeoutMicro))
 import Control.Monad (mzero)
 
 data Config = Config {token :: String
-                     ,timeout :: Int}
+                     ,timeout :: Int
+                     ,helpMessage :: String
+                     ,repeatMessage :: String
+                     ,repeatNumber :: Int}
 
 instance FromJSON Config where
-  parseJSON (Object config) = Config <$> config .: "token" <*> config .: "timeout"
+  parseJSON (Object config) = Config <$>
+                                config .: "token" <*>
+                                config .: "timeout" <*>
+                                config .: "helpMessage" <*>
+                                config .: "repeatMessage" <*>
+                                config .: "repeatNumber"
   parseJSON _               = mzero
 
 botLoop :: Int -> Config -> IO ()
@@ -39,9 +47,13 @@ sendMsgs (TelegramUpdates userMessages) config = do
   case userMessages of
     [] -> return 0
     [x] -> case x of
-      TextMessage updateId chatId msg -> do
-        sendTextMsg chatId msg config
-        return  (updateId + 1)
+      TextMessage updateId chatId msg -> case msg of
+        "/help" -> do
+          sendHelpMsg chatId config
+          return  (updateId + 1) 
+        _       -> do
+          sendTextMsg chatId msg config
+          return  (updateId + 1)
       StickerMessage updateId chatId fileId -> do
         sendStickerMsg chatId fileId config
         return  (updateId + 1)
@@ -55,12 +67,17 @@ sendMsgs (TelegramUpdates userMessages) config = do
 
 sendTextMsg :: Int -> String -> Config -> IO ()
 sendTextMsg chatid msg config = do
-    httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendMessage?chat_id=" ++ show chatid ++ "&text=" ++ msg)
+    mapM httpNoBody $ replicate (repeatNumber config) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendMessage?chat_id=" ++ show chatid ++ "&text=" ++ msg)
     return ()
 
 sendStickerMsg :: Int -> String -> Config -> IO ()
 sendStickerMsg chatid stickerID config = do
-    httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendSticker?chat_id=" ++ show chatid ++ "&sticker=" ++ stickerID)
+    mapM httpNoBody $ replicate (repeatNumber config) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendSticker?chat_id=" ++ show chatid ++ "&sticker=" ++ stickerID)
+    return ()
+
+sendHelpMsg :: Int -> Config -> IO ()
+sendHelpMsg chatid config = do
+    httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendMessage?chat_id=" ++ show chatid ++ "&text=" ++ helpMessage config)
     return ()
 
 getConfig :: IO (Maybe Config)
