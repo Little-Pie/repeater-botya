@@ -1,0 +1,7 @@
+{
+  "token": "",
+  "timeout": 30,
+  "helpMessage": "This bot texts your messages back",
+  "repeatMessage": "Enter a number of repetition:",
+  "repeatNumber": 1
+}
