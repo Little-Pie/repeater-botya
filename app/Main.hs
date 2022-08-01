@@ -1,6 +1,6 @@
 module Main where
 
-import Bot
+import TelegramBot
 import ConsolBot
 import Parsing
 

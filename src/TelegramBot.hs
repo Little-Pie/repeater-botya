@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bot where
+module TelegramBot where
 
 import Parsing
 import Data.Aeson
