@@ -3,35 +3,14 @@
 module Bot where
 
 import Parsing
-import qualified Data.ByteString as B (ByteString, readFile)
 import Data.Aeson
+import qualified Data.ByteString as B (ByteString, readFile)
 import Network.HTTP.Simple
 import Network.HTTP.Client.Internal (ResponseTimeout (ResponseTimeoutMicro), RequestBody (RequestBodyBS))
-import Control.Monad (mzero)
 import qualified Data.ByteString.Char8 as BC
-import Data.Maybe
 import Text.Read (readMaybe)
 
 type RepeatNumbers = [(Int,Int)]
-
-data Config = Config {token :: String
-                     ,timeout :: Int
-                     ,helpMessage :: String
-                     ,repeatMessage :: String
-                     ,repeatNumber :: Int
-                     ,repeatAcceptMessage :: String
-                     ,errorMessage :: String}
-
-instance FromJSON Config where
-  parseJSON (Object config) = Config <$>
-                                config .: "token" <*>
-                                config .: "timeout" <*>
-                                config .: "helpMessage" <*>
-                                config .: "repeatMessage" <*>
-                                config .: "repeatNumber" <*>
-                                config .: "repeatAcceptMessage" <*>
-                                config .: "errorMessage"
-  parseJSON _               = mzero
 
 botLoop :: Int -> Config -> [Int] -> RepeatNumbers -> IO ()
 botLoop offset config chatIdsForRepeat repeatNumbers = do
@@ -83,6 +62,7 @@ sendMsgs (TelegramUpdates userMessages) config chatIdsForRepeat repeatNumbers = 
       StickerMessage updateId chatId fileId -> do
         sendStickerMsg chatId fileId config repeatNumbers
         return  (updateId + 1, chatIdsForRepeat, repeatNumbers)
+      NothingMessage updateId -> return (updateId + 1, chatIdsForRepeat, repeatNumbers)
     (x:xs) -> case x of
       TextMessage updateId chatId msg -> case msg of
         "/help" -> do
@@ -100,15 +80,20 @@ sendMsgs (TelegramUpdates userMessages) config chatIdsForRepeat repeatNumbers = 
       StickerMessage updateId chatId fileId -> do
         sendStickerMsg chatId fileId config repeatNumbers
         sendMsgs (TelegramUpdates xs) config chatIdsForRepeat repeatNumbers
+      NothingMessage updateId -> sendMsgs (TelegramUpdates xs) config chatIdsForRepeat repeatNumbers
 
 sendTextMsg :: Int -> String -> Config -> [Int] -> RepeatNumbers -> IO ()
 sendTextMsg chatid msg config chatIdsForRepeat repeatNumbers = do
-    mapM httpNoBody $ replicate (if lookup chatid repeatNumbers == Nothing then repeatNumber config else fromJust $ lookup chatid repeatNumbers ) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendMessage?chat_id=" ++ show chatid ++ "&text=" ++ msg)
+    mapM httpNoBody $ replicate (case lookup chatid repeatNumbers of
+                                   Nothing -> repeatNumber config
+                                   Just repeatNumb -> repeatNumb) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendMessage?chat_id=" ++ show chatid ++ "&text=" ++ msg)
     return ()
 
 sendStickerMsg :: Int -> String -> Config -> RepeatNumbers -> IO ()
 sendStickerMsg chatid stickerID config repeatNumbers = do
-    mapM httpNoBody $ replicate (if lookup chatid repeatNumbers == Nothing then repeatNumber config else fromJust $ lookup chatid repeatNumbers ) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendSticker?chat_id=" ++ show chatid ++ "&sticker=" ++ stickerID)
+    mapM httpNoBody $ replicate (case lookup chatid repeatNumbers of
+                                   Nothing -> repeatNumber config
+                                   Just repeatNumb -> repeatNumb) $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token config ++ "/sendSticker?chat_id=" ++ show chatid ++ "&sticker=" ++ stickerID)
     return ()
 
 sendHelpMsg :: Int -> Config -> IO ()
