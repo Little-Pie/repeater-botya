@@ -8,6 +8,7 @@ import qualified Data.ByteString as B (ByteString, readFile)
 import Network.HTTP.Simple
 import Network.HTTP.Client.Internal (ResponseTimeout (ResponseTimeoutMicro), RequestBody (RequestBodyBS))
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as LB (toStrict)
 import Text.Read (readMaybe)
 
 type RepeatNumbers = [(Int,Int)]
@@ -115,7 +116,8 @@ sendRepeatMsg chatid config = do
           parseRequestThrow_ $
           "https://api.telegram.org/bot" ++ token config ++ "/sendMessage")
     return ()
-    where body = RequestBodyBS $ BC.pack $ "{\"chat_id\":\"" ++ show chatid ++ "\",\"text\":\"" ++ repeatMessage config ++ "\",\"reply_markup\":{\"keyboard\": [[{\"text\": \"1\"},{\"text\": \"2\"},{\"text\": \"3\"},{\"text\": \"4\"},{\"text\": \"5\"}]]},{\"one_time_keyboard\":\"true\"}}"    
+    where body = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatid (repeatMessage config) (ReplyMarkup [Text' "1",Text' "2",Text' "3",Text' "4",Text' "5"])
+    --"{\"chat_id\":\"" ++ show chatid ++ "\",\"text\":\"" ++ repeatMessage config ++ "\",\"reply_markup\":{\"keyboard\": [[{\"text\": \"1\"},{\"text\": \"2\"},{\"text\": \"3\"},{\"text\": \"4\"},{\"text\": \"5\"}]]},{\"one_time_keyboard\":\"true\"}}"    
 
 sendRepeatAcceptMsg :: Int -> String -> Config -> IO ()
 sendRepeatAcceptMsg chatid msg config = do
@@ -126,7 +128,8 @@ sendRepeatAcceptMsg chatid msg config = do
           parseRequestThrow_ $
           "https://api.telegram.org/bot" ++ token config ++ "/sendMessage")
     return ()
-    where body = RequestBodyBS $ BC.pack $ "{\"chat_id\":\"" ++ show chatid ++ "\",\"text\":\"" ++ repeatAcceptMessage config ++ msg ++ " times\",\"reply_markup\":{\"remove_keyboard\":true}"
+    where body = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatid (repeatAcceptMessage config ++ msg ++ " times") RemoveKeyboard
+    --"{\"chat_id\":\"" ++ show chatid ++ "\",\"text\":\"" ++ repeatAcceptMessage config ++ msg ++ " times\",\"reply_markup\":{\"remove_keyboard\":true}}"
 
 getConfig :: IO (Maybe Config)
 getConfig = do

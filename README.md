@@ -4,8 +4,8 @@
 * This bot sends back tesxts messages and stickers to the users. It can work in two modes: consol and telegram (can be switched in config).
 
 ## Commands:
-/help - gives a description of the bot to the user
-/repeat - asks a number from 1 to 5 from the user, and starts to repeat messages with this number of times
+* /help - gives a description of the bot to the user
+* /repeat - asks a number from 1 to 5 from the user, and starts to repeat messages with this number of times
 
 ## Installation
 * Rename "config-template.json" to "config.json"
