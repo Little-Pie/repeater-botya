@@ -2,10 +2,11 @@
 
 module TelegramBot where
 
+import Config (Config (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT, ask)
-import Data.Aeson
-import qualified Data.ByteString as B (ByteString, readFile)
+import Data.Aeson (decodeStrict, encode)
+import qualified Data.ByteString as B (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
@@ -17,15 +18,15 @@ type RepeatNumbers = [(Int, Int)]
 
 type App a = ReaderT Config IO a
 
-botLoop :: Int -> [Int] -> RepeatNumbers -> App ()
-botLoop offset chatIdsForRepeat repeatNumbers = do
+telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
+telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
   telegramResponse <- getUpdates offset
   let mbUpdates = parseUpdates telegramResponse
   case mbUpdates of
     Nothing -> liftIO $ putStrLn "Couldn't parse telegramResponse"
     Just updates -> do
       (newOffset, newChatIdsForRepeat, newRepeatNumbers) <- sendMsgs updates chatIdsForRepeat repeatNumbers
-      botLoop newOffset newChatIdsForRepeat newRepeatNumbers
+      telegramBotLoop newOffset newChatIdsForRepeat newRepeatNumbers
 
 getUpdates :: Int -> App B.ByteString
 getUpdates offset = do
@@ -34,7 +35,7 @@ getUpdates offset = do
   return (getResponseBody response)
 
 parseUpdates :: B.ByteString -> Maybe TelegramUpdates
-parseUpdates telegramResponse = decodeStrict telegramResponse
+parseUpdates = decodeStrict
 
 sendMsgs :: TelegramUpdates -> [Int] -> RepeatNumbers -> App (Int, [Int], RepeatNumbers)
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
@@ -63,7 +64,7 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
                   if numb > 0 && numb < 6
                     then do
                       sendRepeatAcceptMsg chatId msg
-                      return (updateId + 1, (filter (/= chatId) chatIdsForRepeat), (chatId, read msg :: Int) : repeatNumbers)
+                      return (updateId + 1, filter (/= chatId) chatIdsForRepeat, (chatId, read msg :: Int) : repeatNumbers)
                     else do
                       sendErrorMsg chatId
                       sendRepeatMsg chatId
@@ -162,11 +163,3 @@ sendRepeatAcceptMsg chatid msg = do
   return ()
   where
     body config = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatid (repeatAcceptMessage config ++ msg ++ " times") RemoveKeyboard
-
-getConfig :: IO (Maybe Config)
-getConfig = do
-  rawJSON <- B.readFile "config.json"
-  let result = decodeStrict rawJSON :: Maybe Config
-  case result of
-    Nothing -> return Nothing
-    Just conf -> return $ Just conf

@@ -1,9 +1,10 @@
 module Main where
 
-import ConsolBot
+import Config (Config (..), getConfig)
+import ConsolBot (consolBotLoop)
 import Control.Monad.Trans.Reader (runReaderT)
 import Parsing
-import TelegramBot
+import TelegramBot (telegramBotLoop)
 
 main :: IO ()
 main = do
@@ -11,6 +12,6 @@ main = do
   case mbConfig of
     Nothing -> putStrLn "Couldn't parse config"
     Just config -> case mode config of
-      "telegram" -> runReaderT (botLoop 0 [] []) config
+      "telegram" -> runReaderT (telegramBotLoop 0 [] []) config
       "consol" -> consolBotLoop
       _ -> putStrLn "Set mode in config to \"consol\" or \"telegram\""

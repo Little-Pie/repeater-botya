@@ -6,7 +6,7 @@ import Control.Applicative ((<|>))
 import Control.Monad (mzero)
 import Data.Aeson
 
-data TelegramUpdates = TelegramUpdates {updates :: [UserMessage]}
+newtype TelegramUpdates = TelegramUpdates {updates :: [UserMessage]}
 
 data KeyBoard = KeyBoard
   { chat_id' :: Int,
@@ -38,30 +38,6 @@ data Keys = Text' String
 
 instance ToJSON Keys where
   toJSON (Text' str) = object ["text" .= str]
-
-data Config = Config
-  { token :: String,
-    timeout :: Int,
-    helpMessage :: String,
-    repeatMessage :: String,
-    repeatNumber :: Int,
-    repeatAcceptMessage :: String,
-    errorMessage :: String,
-    mode :: String
-  }
-
-instance FromJSON Config where
-  parseJSON (Object config) =
-    Config
-      <$> config .: "token"
-      <*> config .: "timeout"
-      <*> config .: "helpMessage"
-      <*> config .: "repeatMessage"
-      <*> config .: "repeatNumber"
-      <*> config .: "repeatAcceptMessage"
-      <*> config .: "errorMessage"
-      <*> config .: "mode"
-  parseJSON _ = mzero
 
 instance FromJSON TelegramUpdates where
   parseJSON (Object telegramUpdates) = do
