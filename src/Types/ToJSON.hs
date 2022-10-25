@@ -5,17 +5,17 @@ module Types.ToJSON where
 import Data.Aeson (ToJSON (..), object, (.=))
 
 data KeyBoard = KeyBoard
-  { chat_id' :: Int,
-    text' :: String,
-    reply_markup' :: ReplyMarkup
+  { chatId :: Int,
+    text :: String,
+    replyMarkup :: ReplyMarkup
   }
 
 instance ToJSON KeyBoard where
-  toJSON (KeyBoard aChatid aText aReplymarkup) =
+  toJSON (KeyBoard chatId text replyMarkup) =
     object
-      [ "chat_id" .= aChatid,
-        "text" .= aText,
-        "reply_markup" .= aReplymarkup
+      [ "chat_id" .= chatId,
+        "text" .= text,
+        "reply_markup" .= replyMarkup
       ]
 
 data ReplyMarkup
@@ -30,7 +30,7 @@ instance ToJSON ReplyMarkup where
       ]
   toJSON RemoveKeyboard = object ["remove_keyboard" .= True]
 
-newtype Keys = Text' String
+newtype Keys = Text String
 
 instance ToJSON Keys where
-  toJSON (Text' str) = object ["text" .= str]
+  toJSON (Text str) = object ["text" .= str]

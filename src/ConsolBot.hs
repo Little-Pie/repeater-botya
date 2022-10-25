@@ -1,29 +1,33 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module ConsolBot where
 
-import Text.Read
+import Config (Config (..))
+import Control.Monad (replicateM_)
+import Text.Read (readMaybe)
 
-consolBotLoop :: IO ()
-consolBotLoop = do
-  saying 1
+consolBotLoop :: Config -> IO ()
+consolBotLoop Config {..} = do
+  consolBot repeatNumber
   where
-    saying :: Int -> IO ()
-    saying t = do
+    consolBot :: Int -> IO ()
+    consolBot repeatNumber = do
       text <- getLine
-      newt <- helper t text
-      saying newt
+      newRepeatNumber <- helper repeatNumber text
+      consolBot newRepeatNumber
       pure ()
 
 helper :: Int -> String -> IO Int
-helper t "/help" = putStrLn "This bot texts your messages back" >> pure t
-helper t "/repeat" = ifBad t
-helper t str = mapM putStrLn (replicate t str) >> pure t
+helper repeatNumber "/help" = putStrLn "This bot texts your messages back" >> pure repeatNumber
+helper repeatNumber "/repeat" = getRepeatNumber repeatNumber
+helper repeatNumber str = replicateM_ repeatNumber (putStrLn str) >> pure repeatNumber
 
-ifBad t = do
+getRepeatNumber repeatNumber = do
   putStrLn "Enter a number of repetition:"
-  nStr <- getLine
-  let mbN = readMaybe nStr :: Maybe Int
-  case mbN of
-    Just n -> if n > 0 && n < 6 then pure n else putStrLn msg >> pure t >> ifBad t
-    Nothing -> putStrLn msg >> pure t >> ifBad t
+  strNumber <- getLine
+  let mbNumber = readMaybe strNumber :: Maybe Int
+  case mbNumber of
+    Just number -> if number > 0 && number < 6 then pure number else putStrLn msgAboutRepeatNumber >> pure repeatNumber >> getRepeatNumber repeatNumber
+    Nothing -> putStrLn msgAboutRepeatNumber >> pure repeatNumber >> getRepeatNumber repeatNumber
 
-msg = "Please enter number from 1 to 5"
+msgAboutRepeatNumber = "Please enter number from 1 to 5"

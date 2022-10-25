@@ -12,5 +12,5 @@ main = do
     Nothing -> putStrLn "Couldn't parse config"
     Just config -> case mode config of
       "telegram" -> runReaderT (telegramBotLoop 0 [] []) config
-      "consol" -> consolBotLoop
+      "consol" -> consolBotLoop config
       _ -> putStrLn "Set mode in config to \"consol\" or \"telegram\""
