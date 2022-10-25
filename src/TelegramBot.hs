@@ -4,12 +4,14 @@
 module TelegramBot where
 
 import Config (Config (..))
+import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT, ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as LB (toStrict)
+import Data.Maybe (fromMaybe)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
 import Text.Read (readMaybe)
@@ -96,26 +98,24 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
 sendTextMsg :: Int -> String -> [Int] -> RepeatNumbers -> App ()
 sendTextMsg chatId msg chatIdsForRepeat repeatNumbers = do
   Config {..} <- ask
-  mapM (liftIO . httpNoBody) $
-    replicate
-      ( case lookup chatId repeatNumbers of
-          Nothing -> repeatNumber
-          Just repeatNumb -> repeatNumb
-      )
-      $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ msg)
-  return ()
+  replicateM_
+    ( fromMaybe
+        repeatNumber
+        (lookup chatId repeatNumbers)
+    )
+    $ (liftIO . httpNoBody)
+      (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ msg)
 
 sendStickerMsg :: Int -> String -> RepeatNumbers -> App ()
 sendStickerMsg chatId stickerId repeatNumbers = do
   Config {..} <- ask
-  mapM (liftIO . httpNoBody) $
-    replicate
-      ( case lookup chatId repeatNumbers of
-          Nothing -> repeatNumber
-          Just repeatNumb -> repeatNumb
-      )
-      $ (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendSticker?chat_id=" ++ show chatId ++ "&sticker=" ++ stickerId)
-  return ()
+  replicateM_
+    ( fromMaybe
+        repeatNumber
+        (lookup chatId repeatNumbers)
+    )
+    $ (liftIO . httpNoBody)
+      (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendSticker?chat_id=" ++ show chatId ++ "&sticker=" ++ stickerId)
 
 sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
