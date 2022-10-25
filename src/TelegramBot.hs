@@ -11,8 +11,9 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple
-import Parsing
 import Text.Read (readMaybe)
+import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
+import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 

@@ -3,7 +3,6 @@ module Main where
 import Config (Config (..), getConfig)
 import ConsolBot (consolBotLoop)
 import Control.Monad.Trans.Reader (runReaderT)
-import Parsing
 import TelegramBot (telegramBotLoop)
 
 main :: IO ()
