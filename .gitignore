@@ -1,4 +1,6 @@
 .stack-work/
 *~
 *.cabal
+*.vscode
+*.history
 config.json

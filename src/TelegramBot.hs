@@ -3,15 +3,15 @@
 
 module TelegramBot where
 
-import Config (Config (..))
 import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Data.Maybe (fromMaybe)
+import Environment (App, Environment (..))
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
 import Text.Read (readMaybe)
@@ -19,8 +19,6 @@ import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
-
-type App a = ReaderT Config IO a
 
 telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
@@ -34,7 +32,7 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
 
 getUpdates :: Int -> App BS.ByteString
 getUpdates offset = do
-  Config {..} <- ask
+  Environment {..} <- ask
   response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
   return (getResponseBody response)
 
@@ -97,7 +95,7 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
 
 sendTextMsg :: Int -> String -> [Int] -> RepeatNumbers -> App ()
 sendTextMsg chatId msg chatIdsForRepeat repeatNumbers = do
-  Config {..} <- ask
+  Environment {..} <- ask
   replicateM_
     ( fromMaybe
         repeatNumber
@@ -108,7 +106,7 @@ sendTextMsg chatId msg chatIdsForRepeat repeatNumbers = do
 
 sendStickerMsg :: Int -> String -> RepeatNumbers -> App ()
 sendStickerMsg chatId stickerId repeatNumbers = do
-  Config {..} <- ask
+  Environment {..} <- ask
   replicateM_
     ( fromMaybe
         repeatNumber
@@ -119,46 +117,46 @@ sendStickerMsg chatId stickerId repeatNumbers = do
 
 sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
-  Config {..} <- ask
+  Environment {..} <- ask
   liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
   return ()
 
 sendErrorMsg :: Int -> App ()
 sendErrorMsg chatId = do
-  Config {..} <- ask
-  liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ errorMessage)
+  Environment {..} <- ask
+  liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
   return ()
 
 sendRepeatMsg :: Int -> App ()
 sendRepeatMsg chatId = do
-  config@Config {..} <- ask
+  env@Environment {..} <- ask
   resp <-
     liftIO $
       httpBS $
         addRequestHeader "Content-Type" "application/json" $
           setRequestBody
-            (body config)
+            (body env)
             ( setRequestMethod "POST" $
                 parseRequestThrow_ $
                   "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
             )
   return ()
   where
-    body Config {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
+    body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
 sendRepeatAcceptMsg :: Int -> String -> App ()
 sendRepeatAcceptMsg chatId msg = do
-  config@Config {..} <- ask
+  env@Environment {..} <- ask
   resp <-
     liftIO $
       httpBS $
         addRequestHeader "Content-Type" "application/json" $
           setRequestBody
-            (body config)
+            (body env)
             ( setRequestMethod "POST" $
                 parseRequestThrow_ $
                   "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
             )
   return ()
   where
-    body Config {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId (repeatAcceptMessage ++ msg ++ " times") RemoveKeyboard
+    body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId (repeatAcceptMessage ++ msg ++ " times") RemoveKeyboard

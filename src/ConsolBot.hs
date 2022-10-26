@@ -2,32 +2,57 @@
 
 module ConsolBot where
 
-import Config (Config (..))
 import Control.Monad (replicateM_)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Reader (ask)
+import Environment (App, Environment (..))
+import Logging (printRelease)
 import Text.Read (readMaybe)
 
-consolBotLoop :: Config -> IO ()
-consolBotLoop Config {..} = do
+consolBotLoop :: App ()
+consolBotLoop = do
+  Environment {..} <- ask
   consolBot repeatNumber
   where
-    consolBot :: Int -> IO ()
-    consolBot repeatNumber = do
-      text <- getLine
-      newRepeatNumber <- helper repeatNumber text
-      consolBot newRepeatNumber
+    consolBot :: Int -> App ()
+    consolBot repNumber = do
+      text <- liftIO getLine
+      newRepNumber <- helper repNumber text
+      consolBot newRepNumber
       pure ()
 
-helper :: Int -> String -> IO Int
-helper repeatNumber "/help" = putStrLn "This bot texts your messages back" >> pure repeatNumber
-helper repeatNumber "/repeat" = getRepeatNumber repeatNumber
-helper repeatNumber str = replicateM_ repeatNumber (putStrLn str) >> pure repeatNumber
+helper :: Int -> String -> App Int
+helper repNumber "/help" = do
+  Environment {..} <- ask
+  printRelease $ "[User]: /help\n[Bot]: " ++ helpMessage
+  liftIO $ putStrLn helpMessage
+  pure repNumber
+helper repNumber "/repeat" = do
+  Environment {..} <- ask
+  printRelease $ "[User]: /repeat\n[Bot]: " ++ repeatMessage
+  liftIO $ putStrLn repeatMessage
+  getRepNumber repNumber
+helper repNumber str = do
+  printRelease $ "[User]: " ++ str ++ concat (replicate repNumber $ "\n[Bot]: " ++ str)
+  liftIO $ replicateM_ repNumber (putStrLn str) >> pure repNumber
 
-getRepeatNumber repeatNumber = do
-  putStrLn "Enter a number of repetition:"
-  strNumber <- getLine
+getRepNumber :: Int -> App Int
+getRepNumber repNumber = do
+  Environment {..} <- ask
+  strNumber <- liftIO getLine
   let mbNumber = readMaybe strNumber :: Maybe Int
   case mbNumber of
-    Just number -> if number > 0 && number < 6 then pure number else putStrLn msgAboutRepeatNumber >> pure repeatNumber >> getRepeatNumber repeatNumber
-    Nothing -> putStrLn msgAboutRepeatNumber >> pure repeatNumber >> getRepeatNumber repeatNumber
-
-msgAboutRepeatNumber = "Please enter number from 1 to 5"
+    Just number ->
+      if number > 0 && number < 6
+        then do
+          printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatAcceptMessage ++ strNumber ++ " times"
+          liftIO $ putStrLn $ repeatAcceptMessage ++ strNumber ++ " times"
+          pure number
+        else do
+          printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatNumberErrorMessage
+          liftIO $ putStrLn repeatNumberErrorMessage
+          getRepNumber repNumber
+    Nothing -> do
+      printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatNumberErrorMessage
+      liftIO $ putStrLn repeatNumberErrorMessage
+      getRepNumber repNumber

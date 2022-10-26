@@ -5,6 +5,7 @@ module Config where
 import Control.Monad (mzero)
 import Data.Aeson (FromJSON (..), Value (..), decodeStrict, (.:))
 import qualified Data.ByteString as B (ByteString, readFile)
+import Environment (LoggingLevel)
 
 data Config = Config
   { token :: String,
@@ -13,8 +14,9 @@ data Config = Config
     repeatMessage :: String,
     repeatNumber :: Int,
     repeatAcceptMessage :: String,
-    errorMessage :: String,
-    mode :: String
+    repeatNumberErrorMessage :: String,
+    mode :: String,
+    loggingLevel :: LoggingLevel
   }
 
 instance FromJSON Config where
@@ -26,8 +28,9 @@ instance FromJSON Config where
       <*> config .: "repeatMessage"
       <*> config .: "repeatNumber"
       <*> config .: "repeatAcceptMessage"
-      <*> config .: "errorMessage"
+      <*> config .: "repeatNumberErrorMessage"
       <*> config .: "mode"
+      <*> config .: "loggingLevel"
   parseJSON _ = mzero
 
 getConfig :: IO (Maybe Config)

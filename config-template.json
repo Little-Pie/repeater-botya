@@ -6,5 +6,6 @@
   "repeatNumber": 1,
   "repeatAcceptMessage": "Now I will repeat your messages ",
   "errorMessage": "Please enter number from 1 to 5",
-  "mode": "telegram"
+  "mode": "telegram",
+  "loggingLevel": "Debug"
 }

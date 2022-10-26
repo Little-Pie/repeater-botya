@@ -1,0 +1,11 @@
+[User]: d
+[Bot]: d
+[User]: dd
+[Bot]: dd
+[User]: /repeat
+[Bot]: Enter a number of repetition:
+[User]: 2
+[Bot]: Now I will repeat your messages 2 times
+[User]: f
+[Bot]: f
+[Bot]: f
