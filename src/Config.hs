@@ -4,7 +4,7 @@ module Config where
 
 import Control.Monad (mzero)
 import Data.Aeson (FromJSON (..), Value (..), decodeStrict, (.:))
-import qualified Data.ByteString as B (ByteString, readFile)
+import Data.ByteString as B (readFile)
 import Environment (LoggingLevel)
 
 data Config = Config
@@ -38,5 +38,5 @@ getConfig = do
   rawJSON <- B.readFile "config.json"
   let result = decodeStrict rawJSON :: Maybe Config
   case result of
-    Nothing -> return Nothing
-    Just conf -> return $ Just conf
+    Nothing -> pure Nothing
+    Just conf -> pure $ Just conf

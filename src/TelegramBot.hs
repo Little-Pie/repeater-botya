@@ -3,20 +3,18 @@
 
 module TelegramBot where
 
-import Control.Monad (replicateM_)
+import Control.Monad (replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Data.Maybe (fromMaybe)
 import Environment (App, Environment (..))
 import Handle (Handle (..), Result (..), messagesHandle)
-import Logging (printDebug, printError, printRelease, printWarning)
+import Logging (printError, printRelease, printWarning)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
-import Text.Read (readMaybe)
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
@@ -38,7 +36,7 @@ getUpdates :: Int -> App BS.ByteString
 getUpdates offset = do
   Environment {..} <- ask
   response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
-  return (getResponseBody response)
+  pure (getResponseBody response)
 
 sendMsg :: UserMessage -> Int -> App ()
 sendMsg userMsg repNumber = do
@@ -62,46 +60,40 @@ sendMsg userMsg repNumber = do
 sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
   Environment {..} <- ask
-  liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
-  pure ()
+  void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
 
 sendRepeatNumberErrorMsg :: Int -> App ()
 sendRepeatNumberErrorMsg chatId = do
   Environment {..} <- ask
-  liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
-  pure ()
+  void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
 
 sendRepeatMsg :: Int -> App ()
 sendRepeatMsg chatId = do
   env@Environment {..} <- ask
-  resp <-
-    liftIO $
-      httpBS $
-        addRequestHeader "Content-Type" "application/json" $
-          setRequestBody
-            (body env)
-            ( setRequestMethod "POST" $
-                parseRequestThrow_ $
-                  "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
-            )
-  pure ()
+  void . liftIO $
+    httpBS $
+      addRequestHeader "Content-Type" "application/json" $
+        setRequestBody
+          (body env)
+          ( setRequestMethod "POST" $
+              parseRequestThrow_ $
+                "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
+          )
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
 sendRepeatAcceptMsg :: Int -> String -> App ()
 sendRepeatAcceptMsg chatId msg = do
   env@Environment {..} <- ask
-  resp <-
-    liftIO $
-      httpBS $
-        addRequestHeader "Content-Type" "application/json" $
-          setRequestBody
-            (body env)
-            ( setRequestMethod "POST" $
-                parseRequestThrow_ $
-                  "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
-            )
-  pure ()
+  void . liftIO $
+    httpBS $
+      addRequestHeader "Content-Type" "application/json" $
+        setRequestBody
+          (body env)
+          ( setRequestMethod "POST" $
+              parseRequestThrow_ $
+                "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
+          )
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId (repeatAcceptMessage ++ msg ++ " times") RemoveKeyboard
 
@@ -109,40 +101,40 @@ sendMsgs :: TelegramUpdates -> [Int] -> RepeatNumbers -> App (Int, [Int], Repeat
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
   Environment {..} <- ask
   case userMessages of
-    [] -> return (0, chatIdsForRepeat, repeatNumbers)
+    [] -> pure (0, chatIdsForRepeat, repeatNumbers)
     [userMsg] -> do
       let chatId = getChatId userMsg
       let updateId = getUpdateId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
-      (newIsAskedForRepeat, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
+      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of
         HelpMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
-          return (updateId + 1, chatIdsForRepeat, repeatNumbers)
+          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
         RepeatMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
-          return (updateId + 1, chatId : chatIdsForRepeat, repeatNumbers)
+          pure (updateId + 1, chatId : chatIdsForRepeat, repeatNumbers)
         EchoMessage echoRepNumber -> do
           sendMsg userMsg echoRepNumber
-          return (updateId + 1, chatIdsForRepeat, repeatNumbers)
+          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
         RepeatNumberSuccess newRepNumber -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           sendRepeatAcceptMsg chatId str
-          return (updateId + 1, filter (/= chatId) chatIdsForRepeat, (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
+          pure (updateId + 1, filter (/= chatId) chatIdsForRepeat, (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
         WrongRepeatNumber -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
-          return (updateId + 1, chatIdsForRepeat, repeatNumbers)
+          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
     (userMsg : userMsgs) -> do
       let chatId = getChatId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
-      (newIsAskedForRepeat, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
+      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of
         HelpMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage

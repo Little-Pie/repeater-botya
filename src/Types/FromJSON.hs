@@ -11,7 +11,7 @@ newtype TelegramUpdates = TelegramUpdates {updates :: [UserMessage]}
 instance FromJSON TelegramUpdates where
   parseJSON (Object telegramUpdates) = do
     anArray <- telegramUpdates .: "result"
-    return $ TelegramUpdates anArray
+    pure $ TelegramUpdates anArray
   parseJSON _ = mzero
 
 data UserMessage

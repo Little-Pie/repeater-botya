@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Types.ToJSON where
 
@@ -11,7 +12,7 @@ data KeyBoard = KeyBoard
   }
 
 instance ToJSON KeyBoard where
-  toJSON (KeyBoard chatId text replyMarkup) =
+  toJSON KeyBoard {..} =
     object
       [ "chat_id" .= chatId,
         "text" .= text,

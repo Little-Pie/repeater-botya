@@ -11,7 +11,7 @@ data LoggingLevel = Debug | Release | Warning | Error
   deriving (Eq, Ord)
 
 instance FromJSON LoggingLevel where
-  parseJSON (String loggingLevel) = case loggingLevel of
+  parseJSON (String logLevel) = case logLevel of
     "Debug" -> pure Debug
     "Release" -> pure Release
     "Warning" -> pure Warning

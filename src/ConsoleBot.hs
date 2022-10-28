@@ -8,7 +8,6 @@ import Control.Monad.Trans.Reader (ask)
 import Environment (App, Environment (..))
 import Handle as H (Handle (..), Result (..), messagesHandle)
 import Logging (printRelease)
-import Text.Read (readMaybe)
 
 consoleBotLoop :: App ()
 consoleBotLoop = do
