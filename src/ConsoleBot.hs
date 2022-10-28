@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module ConsolBot where
+module ConsoleBot where
 
 import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
@@ -10,16 +10,16 @@ import Handle as H (Handle (..), Result (..), messagesHandle)
 import Logging (printRelease)
 import Text.Read (readMaybe)
 
-consolBotLoop :: App ()
-consolBotLoop = do
+consoleBotLoop :: App ()
+consoleBotLoop = do
   Environment {..} <- ask
-  consolBot repeatNumber False
+  consoleBot repeatNumber False
   where
-    consolBot :: Int -> Bool -> App ()
-    consolBot repNumber isAskedForRepeat = do
+    consoleBot :: Int -> Bool -> App ()
+    consoleBot repNumber isAskedForRepeat = do
       text <- liftIO getLine
       (newRepNumber, newIsAskedForRepeat) <- handlingMessages repNumber isAskedForRepeat text
-      consolBot newRepNumber newIsAskedForRepeat
+      consoleBot newRepNumber newIsAskedForRepeat
       pure ()
 
 handlingMessages :: Int -> Bool -> String -> App (Int, Bool)

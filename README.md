@@ -14,7 +14,7 @@
 * By default bot works in telegram mode, if you want to turn on console mode then change mode in config to "console"
 
 ## Structure:
-Module Main reads config, parses it and uses function according to your settings in config.json. Module TelegramBot is used to run bot in telegram mode, it uses Telegram Bot API to get updates. Module ConsolBot is used to run bot in console mode.
+Module Main reads config, parses it and uses function according to your settings in config.json. Module TelegramBot is used to run bot in telegram mode, it uses Telegram Bot API to get updates. Module ConsoleBot is used to run bot in console mode.
 
 Besides Main contains functions to open and to close TXT-file for logging.
 

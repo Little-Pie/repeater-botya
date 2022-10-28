@@ -3,7 +3,7 @@
 module Main where
 
 import Config (Config (..), getConfig)
-import ConsolBot (consolBotLoop)
+import ConsoleBot (consoleBotLoop)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Reader (runReaderT)
 import Environment (Environment (..))
@@ -25,12 +25,12 @@ main = do
         "telegram" -> do
           runReaderT (printRelease "Mode \"telegram\" was chosen") env
           runReaderT (telegramBotLoop 0 [] []) env `catch` handleException env
-        "consol" -> do
-          runReaderT (printRelease "Mode \"consol\" was chosen") env
-          runReaderT consolBotLoop env `catch` handleException env
+        "console" -> do
+          runReaderT (printRelease "Mode \"console\" was chosen") env
+          runReaderT consoleBotLoop env `catch` handleException env
         _ -> do
-          runReaderT (printWarning "Set mode in config to \"consol\" or \"telegram\"") env
-          putStrLn "Set mode in config to \"consol\" or \"telegram\""
+          runReaderT (printWarning "Set mode in config to \"console\" or \"telegram\"") env
+          putStrLn "Set mode in config to \"console\" or \"telegram\""
       hClose logHandle
 
 handleException :: Environment -> SomeException -> IO ()
