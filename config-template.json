@@ -2,7 +2,7 @@
   "token": "",
   "timeout": 30,
   "helpMessage": "This bot texts your messages back",
-  "repeatMessage": "Enter a number of repetition:",
+  "repeatMessage": "Enter a number of repetitions:",
   "repeatNumber": 1,
   "repeatAcceptMessage": "Now I will repeat your messages ",
   "errorMessage": "Please enter number from 1 to 5",

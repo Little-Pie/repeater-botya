@@ -27,6 +27,7 @@ dependencies:
 - bytestring
 - http-client
 - transformers
+- hspec
 
 library:
   source-dirs: src

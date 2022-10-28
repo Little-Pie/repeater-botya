@@ -6,53 +6,49 @@ import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import Environment (App, Environment (..))
+import Handle as H (Result (..), consolBotHandle)
 import Logging (printRelease)
 import Text.Read (readMaybe)
 
 consolBotLoop :: App ()
 consolBotLoop = do
   Environment {..} <- ask
-  consolBot repeatNumber
+  consolBot repeatNumber False
   where
-    consolBot :: Int -> App ()
-    consolBot repNumber = do
+    consolBot :: Int -> Bool -> App ()
+    consolBot repNumber isRepeat = do
       text <- liftIO getLine
-      newRepNumber <- helper repNumber text
-      consolBot newRepNumber
+      (newRepNumber, newIsRepeat) <- handlingMessages repNumber isRepeat text
+      consolBot newRepNumber newIsRepeat
       pure ()
 
-helper :: Int -> String -> App Int
-helper repNumber "/help" = do
+handlingMessages :: Int -> Bool -> String -> App (Int, Bool)
+handlingMessages repNumber isRepeat msg = do
   Environment {..} <- ask
-  printRelease $ "[User]: /help\n[Bot]: " ++ helpMessage
-  liftIO $ putStrLn helpMessage
-  pure repNumber
-helper repNumber "/repeat" = do
-  Environment {..} <- ask
-  printRelease $ "[User]: /repeat\n[Bot]: " ++ repeatMessage
-  liftIO $ putStrLn repeatMessage
-  getRepNumber repNumber
-helper repNumber str = do
-  printRelease $ "[User]: " ++ str ++ concat (replicate repNumber $ "\n[Bot]: " ++ str)
-  liftIO $ replicateM_ repNumber (putStrLn str) >> pure repNumber
-
-getRepNumber :: Int -> App Int
-getRepNumber repNumber = do
-  Environment {..} <- ask
-  strNumber <- liftIO getLine
-  let mbNumber = readMaybe strNumber :: Maybe Int
-  case mbNumber of
-    Just number ->
-      if number > 0 && number < 6
-        then do
-          printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatAcceptMessage ++ strNumber ++ " times"
-          liftIO $ putStrLn $ repeatAcceptMessage ++ strNumber ++ " times"
-          pure number
-        else do
-          printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatNumberErrorMessage
-          liftIO $ putStrLn repeatNumberErrorMessage
-          getRepNumber repNumber
-    Nothing -> do
-      printRelease $ "[User]: " ++ strNumber ++ "\n[Bot]: " ++ repeatNumberErrorMessage
+  printRelease $ "[User]: " ++ msg
+  (newIsRepeat, res) <- liftIO $ consolBotHandle isRepeat repNumber msg
+  case res of
+    HelpMessage -> do
+      printRelease $ "[Bot]: " ++ helpMessage
+      liftIO $ putStrLn helpMessage
+      pure (repNumber, newIsRepeat)
+    RepeatMessage -> do
+      printRelease $ "[Bot]: " ++ repeatMessage
+      liftIO $ putStrLn repeatMessage
+      pure (repNumber, newIsRepeat)
+    EchoMessage echoRepNumber -> do
+      replicateM_ echoRepNumber $ printRelease $ "[Bot]: " ++ msg
+      liftIO $ replicateM_ echoRepNumber $ putStrLn msg
+      pure (echoRepNumber, newIsRepeat)
+    RepeatNumberSuccess newRepNumber -> do
+      printRelease $ "[Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
+      liftIO $ putStrLn $ repeatAcceptMessage ++ show newRepNumber ++ " times"
+      pure (newRepNumber, newIsRepeat)
+    WrongRepeatNumber -> do
+      printRelease $ "[Bot]: " ++ repeatNumberErrorMessage
       liftIO $ putStrLn repeatNumberErrorMessage
-      getRepNumber repNumber
+      pure (repNumber, newIsRepeat)
+    WrongRepeatNumberString -> do
+      printRelease $ "[Bot]: " ++ repeatNumberErrorMessage
+      liftIO $ putStrLn repeatNumberErrorMessage
+      pure (repNumber, newIsRepeat)
