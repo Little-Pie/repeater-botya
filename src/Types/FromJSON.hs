@@ -17,7 +17,7 @@ instance FromJSON TelegramUpdates where
 data UserMessage
   = TextMessage Int Int String
   | StickerMessage Int Int String
-  | NothingMessage Int
+  | NothingMessage Int Int
 
 instance FromJSON UserMessage where
   parseJSON (Object userMessage) =
@@ -29,5 +29,7 @@ instance FromJSON UserMessage where
               <*> (userMessage .: "message" >>= (.: "from") >>= (.: "id"))
               <*> (userMessage .: "message" >>= (.: "sticker") >>= (.: "file_id"))
           )
-      <|> (NothingMessage <$> (userMessage .: "update_id"))
+      <|> ( NothingMessage <$> (userMessage .: "update_id")
+              <*> (userMessage .: "message" >>= (.: "from") >>= (.: "id"))
+          )
   parseJSON _ = mzero

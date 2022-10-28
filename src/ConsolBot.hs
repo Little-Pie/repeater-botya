@@ -6,7 +6,7 @@ import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import Environment (App, Environment (..))
-import Handle as H (Result (..), consolBotHandle)
+import Handle as H (Handle (..), Result (..), messagesHandle)
 import Logging (printRelease)
 import Text.Read (readMaybe)
 
@@ -16,39 +16,40 @@ consolBotLoop = do
   consolBot repeatNumber False
   where
     consolBot :: Int -> Bool -> App ()
-    consolBot repNumber isRepeat = do
+    consolBot repNumber isAskedForRepeat = do
       text <- liftIO getLine
-      (newRepNumber, newIsRepeat) <- handlingMessages repNumber isRepeat text
-      consolBot newRepNumber newIsRepeat
+      (newRepNumber, newIsAskedForRepeat) <- handlingMessages repNumber isAskedForRepeat text
+      consolBot newRepNumber newIsAskedForRepeat
       pure ()
 
 handlingMessages :: Int -> Bool -> String -> App (Int, Bool)
-handlingMessages repNumber isRepeat msg = do
+handlingMessages repNumber isAskedForRepeat msg = do
   Environment {..} <- ask
   printRelease $ "[User]: " ++ msg
-  (newIsRepeat, res) <- liftIO $ consolBotHandle isRepeat repNumber msg
+  (newIsAskedForRepeat, res) <- messagesHandle handle isAskedForRepeat repNumber msg
   case res of
     HelpMessage -> do
       printRelease $ "[Bot]: " ++ helpMessage
       liftIO $ putStrLn helpMessage
-      pure (repNumber, newIsRepeat)
+      pure (repNumber, newIsAskedForRepeat)
     RepeatMessage -> do
       printRelease $ "[Bot]: " ++ repeatMessage
       liftIO $ putStrLn repeatMessage
-      pure (repNumber, newIsRepeat)
+      pure (repNumber, newIsAskedForRepeat)
     EchoMessage echoRepNumber -> do
       replicateM_ echoRepNumber $ printRelease $ "[Bot]: " ++ msg
       liftIO $ replicateM_ echoRepNumber $ putStrLn msg
-      pure (echoRepNumber, newIsRepeat)
+      pure (echoRepNumber, newIsAskedForRepeat)
     RepeatNumberSuccess newRepNumber -> do
       printRelease $ "[Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
       liftIO $ putStrLn $ repeatAcceptMessage ++ show newRepNumber ++ " times"
-      pure (newRepNumber, newIsRepeat)
+      pure (newRepNumber, newIsAskedForRepeat)
     WrongRepeatNumber -> do
       printRelease $ "[Bot]: " ++ repeatNumberErrorMessage
       liftIO $ putStrLn repeatNumberErrorMessage
-      pure (repNumber, newIsRepeat)
-    WrongRepeatNumberString -> do
-      printRelease $ "[Bot]: " ++ repeatNumberErrorMessage
-      liftIO $ putStrLn repeatNumberErrorMessage
-      pure (repNumber, newIsRepeat)
+      pure (repNumber, newIsAskedForRepeat)
+  where
+    handle =
+      Handle
+        { getString = Just
+        }
