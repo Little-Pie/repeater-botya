@@ -18,9 +18,17 @@ import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBod
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
-type RepeatNumbers = [(Int, Int)]
+type Message = String
 
-telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
+type Offset = Int
+
+type ChatId = Int
+
+type RepeatNumber = Int
+
+type RepeatNumbers = [(ChatId, RepeatNumber)]
+
+telegramBotLoop :: Offset -> [ChatId] -> RepeatNumbers -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
   telegramResponse <- getUpdates offset
   let mbUpdates = decodeStrict telegramResponse :: Maybe TelegramUpdates
@@ -32,13 +40,13 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
       (newOffset, newChatIdsForRepeat, newRepeatNumbers) <- sendMsgs updates chatIdsForRepeat repeatNumbers
       telegramBotLoop newOffset newChatIdsForRepeat newRepeatNumbers
 
-getUpdates :: Int -> App BS.ByteString
+getUpdates :: Offset -> App BS.ByteString
 getUpdates offset = do
   Environment {..} <- ask
   response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
   pure (getResponseBody response)
 
-sendMsg :: UserMessage -> Int -> App ()
+sendMsg :: UserMessage -> RepeatNumber -> App ()
 sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
@@ -57,17 +65,17 @@ sendMsg userMsg repNumber = do
     NothingMessage _ _ -> do
       printWarning "Warning: User sent unknown type of message"
 
-sendHelpMsg :: Int -> App ()
+sendHelpMsg :: ChatId -> App ()
 sendHelpMsg chatId = do
   Environment {..} <- ask
   void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
 
-sendRepeatNumberErrorMsg :: Int -> App ()
+sendRepeatNumberErrorMsg :: ChatId -> App ()
 sendRepeatNumberErrorMsg chatId = do
   Environment {..} <- ask
   void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
 
-sendRepeatMsg :: Int -> App ()
+sendRepeatMsg :: ChatId -> App ()
 sendRepeatMsg chatId = do
   env@Environment {..} <- ask
   void . liftIO $
@@ -82,7 +90,7 @@ sendRepeatMsg chatId = do
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
-sendRepeatAcceptMsg :: Int -> String -> App ()
+sendRepeatAcceptMsg :: ChatId -> Message -> App ()
 sendRepeatAcceptMsg chatId msg = do
   env@Environment {..} <- ask
   void . liftIO $
@@ -97,7 +105,7 @@ sendRepeatAcceptMsg chatId msg = do
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId (repeatAcceptMessage ++ msg ++ " times") RemoveKeyboard
 
-sendMsgs :: TelegramUpdates -> [Int] -> RepeatNumbers -> App (Int, [Int], RepeatNumbers)
+sendMsgs :: TelegramUpdates -> [ChatId] -> RepeatNumbers -> App (Offset, [ChatId], RepeatNumbers)
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
   Environment {..} <- ask
   case userMessages of
@@ -163,17 +171,17 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
         { getString = getMessage
         }
 
-getChatId :: UserMessage -> Int
+getChatId :: UserMessage -> ChatId
 getChatId (TextMessage _ chatId _) = chatId
 getChatId (StickerMessage _ chatId _) = chatId
 getChatId (NothingMessage _ chatId) = chatId
 
-getUpdateId :: UserMessage -> Int
+getUpdateId :: UserMessage -> ChatId
 getUpdateId (TextMessage updateId _ _) = updateId
 getUpdateId (StickerMessage updateId _ _) = updateId
 getUpdateId (NothingMessage updateId _) = updateId
 
-getMessage :: UserMessage -> Maybe String
+getMessage :: UserMessage -> Maybe Message
 getMessage (TextMessage _ _ str) = Just str
 getMessage (StickerMessage _ _ str) = Just str
 getMessage (NothingMessage _ _) = Nothing
