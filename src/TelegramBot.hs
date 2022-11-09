@@ -20,6 +20,18 @@ import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 
+telegramUrl :: String
+telegramUrl = "https://api.telegram.org/bot"
+
+methodSendMessageUrl :: String
+methodSendMessageUrl = "/sendMessage"
+
+argChatIdUrl :: String
+argChatIdUrl = "?chat_id="
+
+argTextUrl :: String
+argTextUrl = "&text="
+
 telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
   telegramResponse <- getUpdates offset
@@ -35,7 +47,7 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
 getUpdates :: Int -> App BS.ByteString
 getUpdates offset = do
   Environment {..} <- ask
-  response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
+  response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ telegramUrl ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
   pure (getResponseBody response)
 
 sendMsg :: UserMessage -> Int -> App ()
@@ -47,25 +59,25 @@ sendMsg userMsg repNumber = do
       replicateM_ repNumber $ do
         printRelease $ "[Bot]: " ++ msg
         (liftIO . httpNoBody)
-          (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ msg)
+          (parseRequestThrow_ $ telegramUrl ++ token ++ methodSendMessageUrl ++ argChatIdUrl ++ show chatId ++ argTextUrl ++ msg)
     StickerMessage _ chatId stickerId -> do
       printRelease $ "[User]: *some sticker with id " ++ show stickerId ++ "*"
       replicateM_ repNumber $ do
         printRelease $ "[Bot]: *some sticker with id " ++ show stickerId ++ "*"
         (liftIO . httpNoBody)
-          (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendSticker?chat_id=" ++ show chatId ++ "&sticker=" ++ stickerId)
+          (parseRequestThrow_ $ telegramUrl ++ token ++ "/sendSticker" ++ argChatIdUrl ++ show chatId ++ "&sticker=" ++ stickerId)
     NothingMessage _ _ -> do
       printWarning "Warning: User sent unknown type of message"
 
 sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
   Environment {..} <- ask
-  void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
+  void . liftIO $ httpNoBody (parseRequestThrow_ $ telegramUrl ++ token ++ methodSendMessageUrl ++ argChatIdUrl ++ show chatId ++ argTextUrl ++ helpMessage)
 
 sendRepeatNumberErrorMsg :: Int -> App ()
 sendRepeatNumberErrorMsg chatId = do
   Environment {..} <- ask
-  void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
+  void . liftIO $ httpNoBody (parseRequestThrow_ $ telegramUrl ++ token ++ methodSendMessageUrl ++ argChatIdUrl ++ show chatId ++ argTextUrl ++ repeatNumberErrorMessage)
 
 sendRepeatMsg :: Int -> App ()
 sendRepeatMsg chatId = do
@@ -77,7 +89,7 @@ sendRepeatMsg chatId = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
+                telegramUrl ++ token ++ methodSendMessageUrl
           )
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
@@ -92,7 +104,7 @@ sendRepeatAcceptMsg chatId msg = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                "https://api.telegram.org/bot" ++ token ++ "/sendMessage"
+                telegramUrl ++ token ++ methodSendMessageUrl
           )
   where
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId (repeatAcceptMessage ++ msg ++ " times") RemoveKeyboard
