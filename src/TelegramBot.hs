@@ -15,7 +15,7 @@ import Handle (Handle (..), Result (..), messagesHandle)
 import Logging (printDebug, printError, printRelease, printWarning)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
-import Types.Bot (ChatId, ChatIdsForRepeat, Message, Offset, RepeatNumber, RepeatNumbersList (..), SendMsgsResult (..), UpdateId)
+import Types.Bot (ChatId (..), ChatIdsForRepeat, Message, Offset, RepeatNumber, RepeatNumbersList (..), SendMsgsResult (..), UpdateId)
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
@@ -41,13 +41,13 @@ sendMsg :: UserMessage -> RepeatNumber -> App ()
 sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
-    TextMessage _ chatId msg -> do
+    TextMessage _ (ChatId chatId) msg -> do
       printRelease $ "[User]: " ++ msg
       replicateM_ repNumber $ do
         printRelease $ "[Bot]: " ++ msg
         (liftIO . httpNoBody)
           (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ msg)
-    StickerMessage _ chatId stickerId -> do
+    StickerMessage _ (ChatId chatId) stickerId -> do
       printRelease $ "[User]: *some sticker with id " ++ show stickerId ++ "*"
       replicateM_ repNumber $ do
         printRelease $ "[Bot]: *some sticker with id " ++ show stickerId ++ "*"
@@ -57,17 +57,17 @@ sendMsg userMsg repNumber = do
       printWarning "Warning: User sent unknown type of message"
 
 sendHelpMsg :: ChatId -> App ()
-sendHelpMsg chatId = do
+sendHelpMsg (ChatId chatId) = do
   Environment {..} <- ask
   void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ helpMessage)
 
 sendRepeatNumberErrorMsg :: ChatId -> App ()
-sendRepeatNumberErrorMsg chatId = do
+sendRepeatNumberErrorMsg (ChatId chatId) = do
   Environment {..} <- ask
   void . liftIO $ httpNoBody (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ repeatNumberErrorMessage)
 
 sendRepeatMsg :: ChatId -> App ()
-sendRepeatMsg chatId = do
+sendRepeatMsg (ChatId chatId) = do
   env@Environment {..} <- ask
   void . liftIO $
     httpBS $
@@ -82,7 +82,7 @@ sendRepeatMsg chatId = do
     body Environment {..} = RequestBodyBS $ LB.toStrict $ encode $ KeyBoard chatId repeatMessage (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
 sendRepeatAcceptMsg :: ChatId -> Message -> App ()
-sendRepeatAcceptMsg chatId msg = do
+sendRepeatAcceptMsg (ChatId chatId) msg = do
   env@Environment {..} <- ask
   void . liftIO $
     httpBS $
@@ -106,8 +106,6 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList@(Repe
       let updateId = getUpdateId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      printDebug $ show repNumber
-      printDebug $ show (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
       (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of
@@ -135,7 +133,6 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList@(Repe
       let chatId = getChatId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      printDebug $ show repNumber
       let str = fromMaybe "" (getMessage userMsg)
       (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of

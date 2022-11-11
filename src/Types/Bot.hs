@@ -1,6 +1,12 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Types.Bot where
 
-type ChatId = Int
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
+
+newtype ChatId = ChatId Int deriving (Eq, Show, Generic, FromJSON)
 
 type ChatIdsForRepeat = [ChatId]
 
