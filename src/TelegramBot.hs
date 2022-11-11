@@ -15,7 +15,7 @@ import Handle (Handle (..), Result (..), messagesHandle)
 import Logging (printDebug, printError, printRelease, printWarning)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
-import Types.Bot (ChatId (..), ChatIdsForRepeat, Message, Offset, RepeatNumber, RepeatNumbersList (..), SendMsgsResult (..), UpdateId)
+import Types.Bot (ChatId (..), ChatIdsForRepeat, Message, Offset, RepeatNumber, RepeatNumbersList (..), SendMsgsResult (..), UpdateId (..))
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
@@ -32,7 +32,7 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
       telegramBotLoop newOffset newChatIdsForRepeat newRepeatNumbers
 
 getUpdates :: Offset -> App BS.ByteString
-getUpdates offset = do
+getUpdates (UpdateId offset) = do
   Environment {..} <- ask
   response <- liftIO $ httpBS $ setRequestResponseTimeout (ResponseTimeoutMicro $ (timeout + 1) * 1000000) $ parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/getUpdates?offset=" ++ show offset ++ "&timeout=" ++ show timeout
   pure (getResponseBody response)
@@ -100,10 +100,10 @@ sendMsgs :: TelegramUpdates -> ChatIdsForRepeat -> RepeatNumbersList -> App Send
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList@(RepeatNumbersList repeatNumbers) = do
   Environment {..} <- ask
   case userMessages of
-    [] -> pure (SendMsgsResult 0 chatIdsForRepeat repeatNumbersList)
+    [] -> pure (SendMsgsResult (UpdateId 0) chatIdsForRepeat repeatNumbersList)
     [userMsg] -> do
       let chatId = getChatId userMsg
-      let updateId = getUpdateId userMsg
+      let (UpdateId updateId) = getUpdateId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
@@ -112,23 +112,23 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList@(Repe
         HelpMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
-          pure (SendMsgsResult (updateId + 1) chatIdsForRepeat repeatNumbersList)
+          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
         RepeatMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
-          pure (SendMsgsResult (updateId + 1) (chatId : chatIdsForRepeat) repeatNumbersList)
+          pure (SendMsgsResult (UpdateId (updateId + 1)) (chatId : chatIdsForRepeat) repeatNumbersList)
         EchoMessage echoRepNumber -> do
           sendMsg userMsg echoRepNumber
-          pure (SendMsgsResult (updateId + 1) chatIdsForRepeat repeatNumbersList)
+          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
         RepeatNumberSuccess newRepNumber -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           printDebug $ show (RepeatNumbersList ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers))
           sendRepeatAcceptMsg chatId str
-          pure (SendMsgsResult (updateId + 1) (filter (/= chatId) chatIdsForRepeat) (RepeatNumbersList ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)))
+          pure (SendMsgsResult (UpdateId (updateId + 1)) (filter (/= chatId) chatIdsForRepeat) (RepeatNumbersList ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)))
         WrongRepeatNumber -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
-          pure (SendMsgsResult (updateId + 1) chatIdsForRepeat repeatNumbersList)
+          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
     (userMsg : userMsgs) -> do
       let chatId = getChatId userMsg
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat

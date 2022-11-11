@@ -10,11 +10,11 @@ newtype ChatId = ChatId Int deriving (Eq, Show, Generic, FromJSON)
 
 type ChatIdsForRepeat = [ChatId]
 
+newtype UpdateId = UpdateId Int deriving (Eq, Show, Generic, FromJSON)
+
+type Offset = UpdateId
+
 type Message = String
-
-type Offset = Int
-
-type UpdateId = Int
 
 type RepeatNumber = Int
 

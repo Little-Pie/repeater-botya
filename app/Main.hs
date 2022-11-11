@@ -10,7 +10,7 @@ import Environment (Environment (..))
 import Logging (printDebug, printError, printRelease, printWarning)
 import System.IO (IOMode (..), hClose, openFile)
 import TelegramBot (telegramBotLoop)
-import Types.Bot (RepeatNumbersList (..))
+import Types.Bot (RepeatNumbersList (..), UpdateId (..))
 
 main :: IO ()
 main = do
@@ -25,7 +25,7 @@ main = do
       case mode of
         "telegram" -> do
           runReaderT (printRelease "Mode \"telegram\" was chosen") env
-          runReaderT (telegramBotLoop 0 [] (RepeatNumbersList [])) env `catch` handleException env
+          runReaderT (telegramBotLoop (UpdateId 0) [] (RepeatNumbersList [])) env `catch` handleException env
         "console" -> do
           runReaderT (printRelease "Mode \"console\" was chosen") env
           runReaderT consoleBotLoop env `catch` handleException env
