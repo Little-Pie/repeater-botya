@@ -5,6 +5,7 @@ module TelegramBot where
 
 import Control.Monad (replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
@@ -108,24 +109,24 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
-      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
-      case res of
-        HelpMessage -> do
+      result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
+      case result of
+        Just HelpMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
-        RepeatMessage -> do
+        Just RepeatMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
           pure (updateId + 1, chatId : chatIdsForRepeat, repeatNumbers)
-        EchoMessage echoRepNumber -> do
+        Just (EchoMessage echoRepNumber) -> do
           sendMsg userMsg echoRepNumber
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
-        RepeatNumberSuccess newRepNumber -> do
+        Just (RepeatNumberSuccess newRepNumber) -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           sendRepeatAcceptMsg chatId str
           pure (updateId + 1, filter (/= chatId) chatIdsForRepeat, (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
-        WrongRepeatNumber -> do
+        Nothing -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
@@ -134,26 +135,26 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
       let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
       let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
       let str = fromMaybe "" (getMessage userMsg)
-      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
-      case res of
-        HelpMessage -> do
+      result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
+      case result of
+        Just HelpMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
-        RepeatMessage -> do
+        Just RepeatMessage -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
           sendMsgs (TelegramUpdates userMsgs) (chatId : chatIdsForRepeat) repeatNumbers
-        EchoMessage echoRepNumber -> do
+        Just (EchoMessage echoRepNumber) -> do
           printRelease $ "[User]: " ++ str
           replicateM_ echoRepNumber $ printRelease $ "[Bot]: " ++ str
           sendMsg userMsg echoRepNumber
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
-        RepeatNumberSuccess newRepNumber -> do
+        Just (RepeatNumberSuccess newRepNumber) -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           sendRepeatAcceptMsg chatId str
           sendMsgs (TelegramUpdates userMsgs) (filter (/= chatId) chatIdsForRepeat) ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
-        WrongRepeatNumber -> do
+        Nothing -> do
           printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
