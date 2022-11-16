@@ -10,7 +10,11 @@ newtype Handle msg = Handle
   { getString :: msg -> Maybe String
   }
 
-data Result = EchoMessage Int | RepeatMessage | HelpMessage | RepeatNumberSuccess Int
+data Result
+  = EchoMessage Int
+  | RepeatMessage
+  | HelpMessage
+  | RepeatNumberSuccess Int
   deriving (Eq, Show)
 
 messagesHandle :: (Monad m) => Handle msg -> Bool -> Int -> msg -> MaybeT m (Bool, Result)
