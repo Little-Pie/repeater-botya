@@ -19,6 +19,16 @@ import Types.Bot (ChatId (..), ChatIdsForRepeat, Message, Offset, RepeatNumber, 
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
+botTokenCheck :: App ()
+botTokenCheck = do
+  Environment {..} <- ask
+  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat ["https://api.telegram.org/bot", token, "/getMe"]
+
+runTelegramBot :: App ()
+runTelegramBot = do
+  botTokenCheck
+  telegramBotLoop (UpdateId 0) [] (RepeatNumbersList [])
+
 telegramBotLoop :: Offset -> ChatIdsForRepeat -> RepeatNumbersList -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
   telegramResponse <- getUpdates offset
