@@ -13,11 +13,11 @@ import TelegramBot (telegramBotLoop)
 
 main :: IO ()
 main = do
-  mbConfig <- getConfig
-  case mbConfig of
-    Nothing -> do
-      putStrLn "Couldn't parse config"
-    Just Config {..} -> do
+  eithConfig <- getConfig
+  case eithConfig of
+    Left errorMsg -> do
+      putStrLn errorMsg
+    Right Config {..} -> do
       logHandle <- openFile "logFile.txt" AppendMode
       let env = Environment token timeout helpMessage repeatMessage repeatNumber repeatAcceptMessage repeatNumberErrorMessage loggingLevel logHandle
       runReaderT (printDebug "Config parsed") env

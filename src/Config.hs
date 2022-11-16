@@ -4,7 +4,7 @@
 
 module Config where
 
-import Data.Aeson (FromJSON, decodeStrict)
+import Data.Aeson (FromJSON, eitherDecodeStrict)
 import Data.ByteString as B (readFile)
 import Environment (LoggingLevel)
 import GHC.Generics (Generic)
@@ -22,7 +22,7 @@ data Config = Config
   }
   deriving (Generic, FromJSON)
 
-getConfig :: IO (Maybe Config)
+getConfig :: IO (Either String Config)
 getConfig = do
   rawJSON <- B.readFile "config.json"
-  pure $ decodeStrict rawJSON
+  pure $ eitherDecodeStrict rawJSON
