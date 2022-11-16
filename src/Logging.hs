@@ -5,35 +5,16 @@ module Logging where
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ask)
 import Environment (App, Environment (..), LoggingLevel (..))
-import System.IO (Handle, hFlush, hPutStrLn)
+import System.IO (hFlush, hPutStrLn)
 
-printDebug :: String -> App ()
-printDebug str = do
+printLog :: LoggingLevel -> String -> App ()
+printLog = printLogHelper
+
+printLogHelper :: LoggingLevel -> String -> App ()
+printLogHelper logLvl str = do
   Environment {..} <- ask
-  if loggingLevel < Release
-    then liftIO $ printLog logHandle str
+  if loggingLevel <= logLvl
+    then do
+      liftIO $ hPutStrLn logHandle str
+      liftIO $ hFlush logHandle
     else pure ()
-
-printRelease :: String -> App ()
-printRelease str = do
-  Environment {..} <- ask
-  if loggingLevel < Warning
-    then liftIO $ printLog logHandle str
-    else pure ()
-
-printWarning :: String -> App ()
-printWarning str = do
-  Environment {..} <- ask
-  if loggingLevel < Error
-    then liftIO $ printLog logHandle str
-    else pure ()
-
-printError :: String -> App ()
-printError str = do
-  Environment {..} <- ask
-  liftIO $ printLog logHandle str
-
-printLog :: Handle -> String -> IO ()
-printLog logHandle str = do
-  hPutStrLn logHandle str
-  hFlush logHandle
