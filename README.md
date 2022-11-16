@@ -12,6 +12,7 @@
 * Rename "config-template.json" to "config.json"
 * Add token of your bot to "config.json"
 * By default bot works in telegram mode, if you want to turn on console mode then change mode in config to "console"
+* Start the bot by command `stack run` in terminal opened in folder with project
 
 ## Structure:
 Module Main reads config, parses it and uses function according to your settings in config.json. Module TelegramBot is used to run bot in telegram mode, it uses Telegram Bot API to get updates. Module ConsoleBot is used to run bot in console mode.

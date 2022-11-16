@@ -6,9 +6,9 @@ import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
-import Environment (App, Environment (..))
+import Environment (App, Environment (..), LoggingLevel (..))
 import Handle as H (Handle (..), Result (..), messagesHandle)
-import Logging (printRelease)
+import Logging (printLog)
 
 consoleBotLoop :: App ()
 consoleBotLoop = do
@@ -25,27 +25,27 @@ consoleBotLoop = do
 handlingMessages :: Int -> Bool -> String -> App (Int, Bool)
 handlingMessages repNumber isAskedForRepeat msg = do
   Environment {..} <- ask
-  printRelease $ "[User]: " ++ msg
+  printLog Release $ "[User]: " ++ msg
   result <- runMaybeT $ messagesHandle handle isAskedForRepeat repNumber msg
   case result of
     Just (newIsAskedForRepeat, HelpMessage) -> do
-      printRelease $ "[Bot]: " ++ helpMessage
+      printLog Release $ "[Bot]: " ++ helpMessage
       liftIO $ putStrLn helpMessage
       pure (repNumber, newIsAskedForRepeat)
     Just (newIsAskedForRepeat, RepeatMessage) -> do
-      printRelease $ "[Bot]: " ++ repeatMessage
+      printLog Release $ "[Bot]: " ++ repeatMessage
       liftIO $ putStrLn repeatMessage
       pure (repNumber, newIsAskedForRepeat)
     Just (newIsAskedForRepeat, EchoMessage echoRepNumber) -> do
-      replicateM_ echoRepNumber $ printRelease $ "[Bot]: " ++ msg
+      replicateM_ echoRepNumber $ printLog Release $ "[Bot]: " ++ msg
       liftIO $ replicateM_ echoRepNumber $ putStrLn msg
       pure (echoRepNumber, newIsAskedForRepeat)
     Just (newIsAskedForRepeat, RepeatNumberSuccess newRepNumber) -> do
-      printRelease $ "[Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
+      printLog Release $ "[Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
       liftIO $ putStrLn $ repeatAcceptMessage ++ show newRepNumber ++ " times"
       pure (newRepNumber, newIsAskedForRepeat)
     Nothing -> do
-      printRelease $ "[Bot]: " ++ repeatNumberErrorMessage
+      printLog Release $ "[Bot]: " ++ repeatNumberErrorMessage
       liftIO $ putStrLn repeatNumberErrorMessage
       pure (repNumber, isAskedForRepeat)
   where
