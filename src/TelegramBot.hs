@@ -10,9 +10,9 @@ import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Data.Maybe (fromMaybe)
-import Environment (App, Environment (..))
+import Environment (App, Environment (..), LoggingLevel (..))
 import Handle (Handle (..), Result (..), messagesHandle)
-import Logging (printError, printRelease, printWarning)
+import Logging (printLog)
 import Network.HTTP.Client.Internal (RequestBody (RequestBodyBS), ResponseTimeout (ResponseTimeoutMicro))
 import Network.HTTP.Simple (addRequestHeader, getResponseBody, httpBS, httpNoBody, parseRequestThrow_, setRequestBody, setRequestMethod, setRequestResponseTimeout)
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
@@ -36,7 +36,7 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
   let mbUpdates = decodeStrict telegramResponse :: Maybe TelegramUpdates
   case mbUpdates of
     Nothing -> do
-      printError "Couldn't parse telegramResponse"
+      printLog Error "Couldn't parse telegramResponse"
       liftIO $ putStrLn "Couldn't parse telegramResponse"
     Just updates -> do
       (newOffset, newChatIdsForRepeat, newRepeatNumbers) <- sendMsgs updates chatIdsForRepeat repeatNumbers
@@ -53,19 +53,19 @@ sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
     TextMessage _ chatId msg -> do
-      printRelease $ "[User]: " ++ msg
+      printLog Release $ "[User]: " ++ msg
       replicateM_ repNumber $ do
-        printRelease $ "[Bot]: " ++ msg
+        printLog Release $ "[Bot]: " ++ msg
         (liftIO . httpNoBody)
           (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendMessage?chat_id=" ++ show chatId ++ "&text=" ++ msg)
     StickerMessage _ chatId stickerId -> do
-      printRelease $ "[User]: *some sticker with id " ++ show stickerId ++ "*"
+      printLog Release $ "[User]: *some sticker with id " ++ show stickerId ++ "*"
       replicateM_ repNumber $ do
-        printRelease $ "[Bot]: *some sticker with id " ++ show stickerId ++ "*"
+        printLog Release $ "[Bot]: *some sticker with id " ++ show stickerId ++ "*"
         (liftIO . httpNoBody)
           (parseRequestThrow_ $ "https://api.telegram.org/bot" ++ token ++ "/sendSticker?chat_id=" ++ show chatId ++ "&sticker=" ++ stickerId)
     NothingMessage _ _ -> do
-      printWarning "Warning: User sent unknown type of message"
+      printLog Warning "Warning: User sent unknown type of message"
 
 sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
@@ -121,22 +121,22 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
       (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of
         HelpMessage -> do
-          printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
+          printLog Release $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
         RepeatMessage -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
           pure (updateId + 1, chatId : chatIdsForRepeat, repeatNumbers)
         EchoMessage echoRepNumber -> do
           sendMsg userMsg echoRepNumber
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
         RepeatNumberSuccess newRepNumber -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           sendRepeatAcceptMsg chatId str
           pure (updateId + 1, filter (/= chatId) chatIdsForRepeat, (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
         WrongRepeatNumber -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
           pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
     (userMsg : userMsgs) -> do
@@ -147,24 +147,24 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
       (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
       case res of
         HelpMessage -> do
-          printRelease $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
+          printLog Release $ "[User]: " ++ str ++ "\n [Bot]: " ++ helpMessage
           sendHelpMsg chatId
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
         RepeatMessage -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatMessage
           sendRepeatMsg chatId
           sendMsgs (TelegramUpdates userMsgs) (chatId : chatIdsForRepeat) repeatNumbers
         EchoMessage echoRepNumber -> do
-          printRelease $ "[User]: " ++ str
-          replicateM_ echoRepNumber $ printRelease $ "[Bot]: " ++ str
+          printLog Release $ "[User]: " ++ str
+          replicateM_ echoRepNumber $ printLog Release $ "[Bot]: " ++ str
           sendMsg userMsg echoRepNumber
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
         RepeatNumberSuccess newRepNumber -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
           sendRepeatAcceptMsg chatId str
           sendMsgs (TelegramUpdates userMsgs) (filter (/= chatId) chatIdsForRepeat) ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
         WrongRepeatNumber -> do
-          printRelease $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
+          printLog Release $ "[User]: " ++ str ++ "\n Bot]: " ++ repeatNumberErrorMessage
           sendRepeatNumberErrorMsg chatId
           sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
   where
