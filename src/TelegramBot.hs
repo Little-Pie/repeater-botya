@@ -20,6 +20,16 @@ import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 
+botTokenCheck :: App ()
+botTokenCheck = do
+  Environment {..} <- ask
+  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat ["https://api.telegram.org/bot", token, "/getMe"]
+
+runTelegramBot :: App ()
+runTelegramBot = do
+  botTokenCheck
+  telegramBotLoop 0 [] []
+
 telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
   telegramResponse <- getUpdates offset
