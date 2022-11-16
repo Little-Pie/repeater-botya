@@ -19,7 +19,17 @@ main = do
       putStrLn "Couldn't parse config"
     Just Config {..} -> do
       logHandle <- openFile "logFile.txt" AppendMode
-      let env = Environment token timeout helpMessage repeatMessage repeatNumber repeatAcceptMessage repeatNumberErrorMessage loggingLevel logHandle
+      let env =
+            Environment
+              token
+              timeout
+              helpMessage
+              repeatMessage
+              repeatNumber
+              repeatAcceptMessage
+              repeatNumberErrorMessage
+              loggingLevel
+              logHandle
       runReaderT (printLog Debug "Config parsed") env
       case mode of
         "telegram" -> do
