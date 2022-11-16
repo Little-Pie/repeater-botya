@@ -34,6 +34,9 @@ import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 
+justBS :: String -> Maybe BS.ByteString
+justBS = Just . BSC.pack
+
 botTokenCheck :: App ()
 botTokenCheck = do
   Environment {..} <- ask
@@ -65,7 +68,7 @@ getUpdates offset = do
         setRequestResponseTimeout
           (ResponseTimeoutMicro $ (timeout + 1) * 1000000)
           $ setRequestQueryString
-            [("offset", Just (BSC.pack $ show offset)), ("timeout", Just (BSC.pack $ show timeout))]
+            [("offset", justBS $ show offset), ("timeout", justBS $ show timeout)]
             $ parseRequestThrow_ $
               concat
                 ["https://api.telegram.org/bot", token, "/getUpdates"]
@@ -81,7 +84,7 @@ sendMsg userMsg repNumber = do
         printLog Release $ concat ["[Bot]: ", msg]
         (liftIO . httpNoBody) $
           setRequestQueryString
-            [("chat_id", Just (BSC.pack $ show chatId)), ("text", Just (BSC.pack msg))]
+            [("chat_id", justBS $ show chatId), ("text", justBS msg)]
             $ parseRequestThrow_ $
               concat
                 ["https://api.telegram.org/bot", token, "/sendMessage"]
@@ -91,7 +94,7 @@ sendMsg userMsg repNumber = do
         printLog Release $ concat ["[Bot]: *some sticker with id ", stickerId, "*"]
         (liftIO . httpNoBody) $
           setRequestQueryString
-            [("chat_id", Just (BSC.pack $ show chatId)), ("sticker", Just (BSC.pack stickerId))]
+            [("chat_id", justBS $ show chatId), ("sticker", justBS stickerId)]
             $ parseRequestThrow_ $
               concat
                 ["https://api.telegram.org/bot", token, "/sendSticker"]
@@ -104,7 +107,7 @@ sendHelpMsg chatId = do
   void . liftIO $
     httpNoBody $
       setRequestQueryString
-        [("chat_id", Just (BSC.pack $ show chatId)), ("text", Just (BSC.pack helpMessage))]
+        [("chat_id", justBS $ show chatId), ("text", justBS helpMessage)]
         $ parseRequestThrow_ $
           concat
             ["https://api.telegram.org/bot", token, "/sendMessage"]
@@ -115,7 +118,7 @@ sendRepeatNumberErrorMsg chatId = do
   void . liftIO $
     httpNoBody $
       setRequestQueryString
-        [("chat_id", Just (BSC.pack $ show chatId)), ("text", Just (BSC.pack repeatNumberErrorMessage))]
+        [("chat_id", justBS $ show chatId), ("text", justBS repeatNumberErrorMessage)]
         $ parseRequestThrow_ $
           concat
             ["https://api.telegram.org/bot", token, "/sendMessage"]
