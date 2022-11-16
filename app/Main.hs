@@ -6,8 +6,8 @@ import Config (Config (..), getConfig)
 import ConsoleBot (consoleBotLoop)
 import Control.Exception (SomeException, catch)
 import Control.Monad.Trans.Reader (runReaderT)
-import Environment (Environment (..))
-import Logging (printDebug, printError, printRelease, printWarning)
+import Environment (Environment (..), LoggingLevel (..))
+import Logging (printLog)
 import System.IO (IOMode (..), hClose, openFile)
 import TelegramBot (telegramBotLoop)
 import Types.Bot (RepeatNumbersList (..), UpdateId (..))
@@ -21,20 +21,20 @@ main = do
     Just Config {..} -> do
       logHandle <- openFile "logFile.txt" AppendMode
       let env = Environment token timeout helpMessage repeatMessage repeatNumber repeatAcceptMessage repeatNumberErrorMessage loggingLevel logHandle
-      runReaderT (printDebug "Config parsed") env
+      runReaderT (printLog Debug "Config parsed") env
       case mode of
         "telegram" -> do
-          runReaderT (printRelease "Mode \"telegram\" was chosen") env
+          runReaderT (printLog Release "Mode \"telegram\" was chosen") env
           runReaderT (telegramBotLoop (UpdateId 0) [] (RepeatNumbersList [])) env `catch` handleException env
         "console" -> do
-          runReaderT (printRelease "Mode \"console\" was chosen") env
+          runReaderT (printLog Release "Mode \"console\" was chosen") env
           runReaderT consoleBotLoop env `catch` handleException env
         _ -> do
-          runReaderT (printWarning "Set mode in config to \"console\" or \"telegram\"") env
+          runReaderT (printLog Warning "Set mode in config to \"console\" or \"telegram\"") env
           putStrLn "Set mode in config to \"console\" or \"telegram\""
       hClose logHandle
 
 handleException :: Environment -> SomeException -> IO ()
 handleException env exception = do
-  runReaderT (printError $ "Exception thrown: " ++ show exception ++ "\n Program terminated") env
+  runReaderT (printLog Error $ "Exception thrown: " ++ show exception ++ "\n Program terminated") env
   putStr $ "Exception thrown: " ++ show exception ++ "\n Program terminated"
