@@ -34,13 +34,16 @@ import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 
+telegramUrl :: String
+telegramUrl = "https://api.telegram.org/bot"
+
 justBS :: String -> Maybe BS.ByteString
 justBS = Just . BSC.pack
 
 botTokenCheck :: App ()
 botTokenCheck = do
   Environment {..} <- ask
-  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat ["https://api.telegram.org/bot", token, "/getMe"]
+  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat [telegramUrl, token, "/getMe"]
 
 runTelegramBot :: App ()
 runTelegramBot = do
@@ -71,7 +74,7 @@ getUpdates offset = do
             [("offset", justBS $ show offset), ("timeout", justBS $ show timeout)]
             $ parseRequestThrow_ $
               concat
-                ["https://api.telegram.org/bot", token, "/getUpdates"]
+                [telegramUrl, token, "/getUpdates"]
   pure (getResponseBody response)
 
 sendMsg :: UserMessage -> Int -> App ()
@@ -87,7 +90,7 @@ sendMsg userMsg repNumber = do
             [("chat_id", justBS $ show chatId), ("text", justBS msg)]
             $ parseRequestThrow_ $
               concat
-                ["https://api.telegram.org/bot", token, "/sendMessage"]
+                [telegramUrl, token, "/sendMessage"]
     StickerMessage _ chatId stickerId -> do
       printLog Release $ concat ["[User]: *some sticker with id ", stickerId, "*"]
       replicateM_ repNumber $ do
@@ -97,7 +100,7 @@ sendMsg userMsg repNumber = do
             [("chat_id", justBS $ show chatId), ("sticker", justBS stickerId)]
             $ parseRequestThrow_ $
               concat
-                ["https://api.telegram.org/bot", token, "/sendSticker"]
+                [telegramUrl, token, "/sendSticker"]
     NothingMessage _ _ -> do
       printLog Warning "Warning: User sent unknown type of message"
 
@@ -110,7 +113,7 @@ sendHelpMsg chatId = do
         [("chat_id", justBS $ show chatId), ("text", justBS helpMessage)]
         $ parseRequestThrow_ $
           concat
-            ["https://api.telegram.org/bot", token, "/sendMessage"]
+            [telegramUrl, token, "/sendMessage"]
 
 sendRepeatNumberErrorMsg :: Int -> App ()
 sendRepeatNumberErrorMsg chatId = do
@@ -121,7 +124,7 @@ sendRepeatNumberErrorMsg chatId = do
         [("chat_id", justBS $ show chatId), ("text", justBS repeatNumberErrorMessage)]
         $ parseRequestThrow_ $
           concat
-            ["https://api.telegram.org/bot", token, "/sendMessage"]
+            [telegramUrl, token, "/sendMessage"]
 
 sendRepeatMsg :: Int -> App ()
 sendRepeatMsg chatId = do
@@ -133,7 +136,7 @@ sendRepeatMsg chatId = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                concat ["https://api.telegram.org/bot", token, "/sendMessage"]
+                concat [telegramUrl, token, "/sendMessage"]
           )
   where
     body Environment {..} =
@@ -155,7 +158,7 @@ sendRepeatAcceptMsg chatId msg = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                concat ["https://api.telegram.org/bot", token, "/sendMessage"]
+                concat [telegramUrl, token, "/sendMessage"]
           )
   where
     body Environment {..} =
