@@ -1,11 +1,13 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Config where
 
-import Control.Monad (mzero)
-import Data.Aeson (FromJSON (..), Value (..), decodeStrict, (.:))
+import Data.Aeson (FromJSON, eitherDecodeStrict)
 import Data.ByteString as B (readFile)
 import Environment (LoggingLevel)
+import GHC.Generics (Generic)
 
 data Config = Config
   { token :: String,
@@ -18,25 +20,9 @@ data Config = Config
     mode :: String,
     loggingLevel :: LoggingLevel
   }
+  deriving (Generic, FromJSON)
 
-instance FromJSON Config where
-  parseJSON (Object config) =
-    Config
-      <$> config .: "token"
-      <*> config .: "timeout"
-      <*> config .: "helpMessage"
-      <*> config .: "repeatMessage"
-      <*> config .: "repeatNumber"
-      <*> config .: "repeatAcceptMessage"
-      <*> config .: "repeatNumberErrorMessage"
-      <*> config .: "mode"
-      <*> config .: "loggingLevel"
-  parseJSON _ = mzero
-
-getConfig :: IO (Maybe Config)
+getConfig :: IO (Either String Config)
 getConfig = do
   rawJSON <- B.readFile "config.json"
-  let result = decodeStrict rawJSON :: Maybe Config
-  case result of
-    Nothing -> pure Nothing
-    Just conf -> pure $ Just conf
+  pure $ eitherDecodeStrict rawJSON

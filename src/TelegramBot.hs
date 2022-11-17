@@ -9,6 +9,7 @@ import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
+import qualified Data.ByteString.Char8 as BSC (pack)
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import Data.Maybe (fromMaybe)
 import Environment (App, Environment (..), LoggingLevel (..))
@@ -26,6 +27,7 @@ import Network.HTTP.Simple
     parseRequestThrow_,
     setRequestBody,
     setRequestMethod,
+    setRequestQueryString,
     setRequestResponseTimeout,
   )
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
@@ -33,10 +35,16 @@ import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
 
 type RepeatNumbers = [(Int, Int)]
 
+telegramUrl :: String
+telegramUrl = "https://api.telegram.org/bot"
+
+justBS :: String -> Maybe BS.ByteString
+justBS = Just . BSC.pack
+
 botTokenCheck :: App ()
 botTokenCheck = do
   Environment {..} <- ask
-  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat ["https://api.telegram.org/bot", token, "/getMe"]
+  void $ liftIO $ httpBS $ parseRequestThrow_ $ concat [telegramUrl, token, "/getMe"]
 
 runTelegramBot :: App ()
 runTelegramBot = do
@@ -63,9 +71,11 @@ getUpdates offset = do
       httpBS $
         setRequestResponseTimeout
           (ResponseTimeoutMicro $ (timeout + 1) * 1000000)
-          $ parseRequestThrow_ $
-            concat
-              ["https://api.telegram.org/bot", token, "/getUpdates?offset=", show offset, "&timeout=", show timeout]
+          $ setRequestQueryString
+            [("offset", justBS $ show offset), ("timeout", justBS $ show timeout)]
+            $ parseRequestThrow_ $
+              concat
+                [telegramUrl, token, "/getUpdates"]
   pure (getResponseBody response)
 
 sendMsg :: UserMessage -> Int -> App ()
@@ -76,20 +86,22 @@ sendMsg userMsg repNumber = do
       printLog Release $ concat ["[User]: ", msg]
       replicateM_ repNumber $ do
         printLog Release $ concat ["[Bot]: ", msg]
-        (liftIO . httpNoBody)
-          ( parseRequestThrow_ $
+        (liftIO . httpNoBody) $
+          setRequestQueryString
+            [("chat_id", justBS $ show chatId), ("text", justBS msg)]
+            $ parseRequestThrow_ $
               concat
-                ["https://api.telegram.org/bot", token, "/sendMessage?chat_id=", show chatId, "&text=", msg]
-          )
+                [telegramUrl, token, "/sendMessage"]
     StickerMessage _ chatId stickerId -> do
-      printLog Release $ concat ["[User]: *some sticker with id ", show stickerId, "*"]
+      printLog Release $ concat ["[User]: *some sticker with id ", stickerId, "*"]
       replicateM_ repNumber $ do
-        printLog Release $ concat ["[Bot]: *some sticker with id ", show stickerId, "*"]
-        (liftIO . httpNoBody)
-          ( parseRequestThrow_ $
+        printLog Release $ concat ["[Bot]: *some sticker with id ", stickerId, "*"]
+        (liftIO . httpNoBody) $
+          setRequestQueryString
+            [("chat_id", justBS $ show chatId), ("sticker", justBS stickerId)]
+            $ parseRequestThrow_ $
               concat
-                ["https://api.telegram.org/bot", token, "/sendSticker?chat_id=", show chatId, "&sticker=", stickerId]
-          )
+                [telegramUrl, token, "/sendSticker"]
     NothingMessage _ _ -> do
       printLog Warning "Warning: User sent unknown type of message"
 
@@ -97,21 +109,23 @@ sendHelpMsg :: Int -> App ()
 sendHelpMsg chatId = do
   Environment {..} <- ask
   void . liftIO $
-    httpNoBody
-      ( parseRequestThrow_ $
+    httpNoBody $
+      setRequestQueryString
+        [("chat_id", justBS $ show chatId), ("text", justBS helpMessage)]
+        $ parseRequestThrow_ $
           concat
-            ["https://api.telegram.org/bot", token, "/sendMessage?chat_id=", show chatId, "&text=", helpMessage]
-      )
+            [telegramUrl, token, "/sendMessage"]
 
 sendRepeatNumberErrorMsg :: Int -> App ()
 sendRepeatNumberErrorMsg chatId = do
   Environment {..} <- ask
   void . liftIO $
-    httpNoBody
-      ( parseRequestThrow_ $
+    httpNoBody $
+      setRequestQueryString
+        [("chat_id", justBS $ show chatId), ("text", justBS repeatNumberErrorMessage)]
+        $ parseRequestThrow_ $
           concat
-            ["https://api.telegram.org/bot", token, "/sendMessage?chat_id=", show chatId, "&text=", repeatNumberErrorMessage]
-      )
+            [telegramUrl, token, "/sendMessage"]
 
 sendRepeatMsg :: Int -> App ()
 sendRepeatMsg chatId = do
@@ -123,7 +137,7 @@ sendRepeatMsg chatId = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                concat ["https://api.telegram.org/bot", token, "/sendMessage"]
+                concat [telegramUrl, token, "/sendMessage"]
           )
   where
     body Environment {..} =
@@ -145,7 +159,7 @@ sendRepeatAcceptMsg chatId msg = do
           (body env)
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
-                concat ["https://api.telegram.org/bot", token, "/sendMessage"]
+                concat [telegramUrl, token, "/sendMessage"]
           )
   where
     body Environment {..} =
