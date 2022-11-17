@@ -3,7 +3,7 @@
 
 module TelegramBot where
 
-import Control.Monad (replicateM_, void)
+import Control.Monad (foldM, replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
@@ -61,7 +61,7 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
       liftIO $ putStrLn "Couldn't parse telegramResponse"
     Just updates -> do
       (newOffset, newChatIdsForRepeat, newRepeatNumbers) <- sendMsgs updates chatIdsForRepeat repeatNumbers
-      telegramBotLoop newOffset newChatIdsForRepeat newRepeatNumbers
+      telegramBotLoop (newOffset + 1) newChatIdsForRepeat newRepeatNumbers
 
 getUpdates :: Int -> App BS.ByteString
 getUpdates offset = do
@@ -171,86 +171,49 @@ sendRepeatAcceptMsg chatId msg = do
 sendMsgs :: TelegramUpdates -> [Int] -> RepeatNumbers -> App (Int, [Int], RepeatNumbers)
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
   Environment {..} <- ask
-  case userMessages of
-    [] -> pure (0, chatIdsForRepeat, repeatNumbers)
-    [userMsg] -> do
-      let chatId = getChatId userMsg
-      let updateId = getUpdateId userMsg
-      let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-      let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      let str = fromMaybe "" (getMessage userMsg)
-      result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
-      case result of
-        Just HelpMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n [Bot]: ", helpMessage]
-          sendHelpMsg chatId
-          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
-        Just RepeatMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatMessage]
-          sendRepeatMsg chatId
-          pure (updateId + 1, chatId : chatIdsForRepeat, repeatNumbers)
-        Just (EchoMessage echoRepNumber) -> do
-          sendMsg userMsg echoRepNumber
-          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
-        Just (RepeatNumberSuccess newRepNumber) -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
-          sendRepeatAcceptMsg chatId str
-          pure
-            ( updateId + 1,
-              filter (/= chatId) chatIdsForRepeat,
-              (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers
-            )
-        Nothing -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
-          sendRepeatNumberErrorMsg chatId
-          pure (updateId + 1, chatIdsForRepeat, repeatNumbers)
-    (userMsg : userMsgs) -> do
-      let chatId = getChatId userMsg
-      let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-      let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      let str = fromMaybe "" (getMessage userMsg)
-      result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
-      case result of
-        Just HelpMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n [Bot]: ", helpMessage]
-          sendHelpMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
-        Just RepeatMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatMessage]
-          sendRepeatMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) (chatId : chatIdsForRepeat) repeatNumbers
-        Just (EchoMessage echoRepNumber) -> do
-          printLog Release $
-            concat
-              ["[User]: ", str]
-          replicateM_ echoRepNumber $ printLog Release $ concat ["[Bot]: ", str]
-          sendMsg userMsg echoRepNumber
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
-        Just (RepeatNumberSuccess newRepNumber) -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
-          sendRepeatAcceptMsg chatId str
-          sendMsgs
-            (TelegramUpdates userMsgs)
-            (filter (/= chatId) chatIdsForRepeat)
-            ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers)
-        Nothing -> do
-          printLog Release $ concat ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
-          sendRepeatNumberErrorMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbers
+  foldM
+    ( \(_, chatIdsForRepeatAcc, repeatNumbersAcc) userMsg -> do
+        let chatId = getChatId userMsg
+        let updateId = getUpdateId userMsg
+        let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
+        let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
+        let str = fromMaybe "" (getMessage userMsg)
+        result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
+        case result of
+          Just HelpMessage -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n [Bot]: ", helpMessage]
+            sendHelpMsg chatId
+            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+          Just RepeatMessage -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatMessage]
+            sendRepeatMsg chatId
+            pure (updateId, chatId : chatIdsForRepeatAcc, repeatNumbersAcc)
+          Just (EchoMessage echoRepNumber) -> do
+            sendMsg userMsg echoRepNumber
+            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+          Just (RepeatNumberSuccess newRepNumber) -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
+            sendRepeatAcceptMsg chatId str
+            pure
+              ( updateId,
+                filter (/= chatId) chatIdsForRepeatAcc,
+                (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbersAcc
+              )
+          Nothing -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
+            sendRepeatNumberErrorMsg chatId
+            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+    )
+    (0, chatIdsForRepeat, repeatNumbers)
+    userMessages
   where
     handle =
       Handle
