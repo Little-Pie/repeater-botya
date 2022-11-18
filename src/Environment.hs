@@ -1,23 +1,15 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Environment where
 
-import Control.Monad (mzero)
 import Control.Monad.Trans.Reader (ReaderT)
-import Data.Aeson (FromJSON (..), Value (String))
+import Data.Aeson (FromJSON)
+import GHC.Generics (Generic)
 import System.IO (Handle)
 
 data LoggingLevel = Debug | Release | Warning | Error
-  deriving (Eq, Ord)
-
-instance FromJSON LoggingLevel where
-  parseJSON (String logLevel) = case logLevel of
-    "Debug" -> pure Debug
-    "Release" -> pure Release
-    "Warning" -> pure Warning
-    "Error" -> pure Error
-    _ -> mzero
-  parseJSON _ = mzero
+  deriving (Eq, Ord, Generic, FromJSON)
 
 data Environment = Environment
   { token :: String,

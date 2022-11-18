@@ -3,8 +3,9 @@
 
 module TelegramBot where
 
-import Control.Monad (replicateM_, void)
+import Control.Monad (foldM, replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
@@ -35,7 +36,7 @@ import Types.Bot
     Message,
     Offset,
     RepeatNumber,
-    RepeatNumbersList (..),
+    RepeatNumbersList,
     SendMsgsResult (..),
     UpdateId (..),
   )
@@ -56,7 +57,7 @@ botTokenCheck = do
 runTelegramBot :: App ()
 runTelegramBot = do
   botTokenCheck
-  telegramBotLoop (UpdateId 0) [] (RepeatNumbersList [])
+  telegramBotLoop (UpdateId 0) [] []
 
 telegramBotLoop :: Offset -> ChatIdsForRepeat -> RepeatNumbersList -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
@@ -67,8 +68,8 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
       printLog Error "Couldn't parse telegramResponse"
       liftIO $ putStrLn "Couldn't parse telegramResponse"
     Just updates -> do
-      SendMsgsResult newOffset newChatIdsForRepeat newRepeatNumbers <- sendMsgs updates chatIdsForRepeat repeatNumbersList
-      telegramBotLoop newOffset newChatIdsForRepeat newRepeatNumbers
+      SendMsgsResult (UpdateId newOffset) newChatIdsForRepeat newRepeatNumbers <- sendMsgs updates chatIdsForRepeat repeatNumbersList
+      telegramBotLoop (UpdateId $ newOffset + 1) newChatIdsForRepeat newRepeatNumbers
 
 getUpdates :: Offset -> App BS.ByteString
 getUpdates (UpdateId offset) = do
@@ -176,89 +177,52 @@ sendRepeatAcceptMsg (ChatId chatId) msg = do
             KeyBoard chatId (concat [repeatAcceptMessage, msg, " times"]) RemoveKeyboard
 
 sendMsgs :: TelegramUpdates -> ChatIdsForRepeat -> RepeatNumbersList -> App SendMsgsResult
-sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList@(RepeatNumbersList repeatNumbers) = do
+sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
   Environment {..} <- ask
-  case userMessages of
-    [] -> pure (SendMsgsResult (UpdateId 0) chatIdsForRepeat repeatNumbersList)
-    [userMsg] -> do
-      let chatId = getChatId userMsg
-      let (UpdateId updateId) = getUpdateId userMsg
-      let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-      let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      let str = fromMaybe "" (getMessage userMsg)
-      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
-      case res of
-        HelpMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n [Bot]: ", helpMessage]
-          sendHelpMsg chatId
-          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
-        RepeatMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatMessage]
-          sendRepeatMsg chatId
-          pure (SendMsgsResult (UpdateId (updateId + 1)) (chatId : chatIdsForRepeat) repeatNumbersList)
-        EchoMessage echoRepNumber -> do
-          sendMsg userMsg echoRepNumber
-          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
-        RepeatNumberSuccess newRepNumber -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
-          sendRepeatAcceptMsg chatId str
-          pure
-            ( SendMsgsResult
-                (UpdateId (updateId + 1))
-                (filter (/= chatId) chatIdsForRepeat)
-                (RepeatNumbersList ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers))
-            )
-        WrongRepeatNumber -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
-          sendRepeatNumberErrorMsg chatId
-          pure (SendMsgsResult (UpdateId (updateId + 1)) chatIdsForRepeat repeatNumbersList)
-    (userMsg : userMsgs) -> do
-      let chatId = getChatId userMsg
-      let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-      let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
-      let str = fromMaybe "" (getMessage userMsg)
-      (_, res) <- messagesHandle handle isAskedForRepeat repNumber userMsg
-      case res of
-        HelpMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n [Bot]: ", helpMessage]
-          sendHelpMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbersList
-        RepeatMessage -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatMessage]
-          sendRepeatMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) (chatId : chatIdsForRepeat) repeatNumbersList
-        EchoMessage echoRepNumber -> do
-          printLog Release $
-            concat
-              ["[User]: ", str]
-          replicateM_ echoRepNumber $ printLog Release $ concat ["[Bot]: ", str]
-          sendMsg userMsg echoRepNumber
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbersList
-        RepeatNumberSuccess newRepNumber -> do
-          printLog Release $
-            concat
-              ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
-          sendRepeatAcceptMsg chatId str
-          sendMsgs
-            (TelegramUpdates userMsgs)
-            (filter (/= chatId) chatIdsForRepeat)
-            (RepeatNumbersList ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbers))
-        WrongRepeatNumber -> do
-          printLog Release $ concat ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
-          sendRepeatNumberErrorMsg chatId
-          sendMsgs (TelegramUpdates userMsgs) chatIdsForRepeat repeatNumbersList
+  foldM
+    ( \(SendMsgsResult _ chatIdsForRepeatAcc repeatNumbersAcc) userMsg -> do
+        let chatId = getChatId userMsg
+        let updateId = getUpdateId userMsg
+        let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
+        let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbersList)
+        let str = fromMaybe "" (getMessage userMsg)
+        result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
+        case result of
+          Just HelpMessage -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n [Bot]: ", helpMessage]
+            sendHelpMsg chatId
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
+          Just RepeatMessage -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatMessage]
+            sendRepeatMsg chatId
+            pure (SendMsgsResult updateId (chatId : chatIdsForRepeatAcc) repeatNumbersAcc)
+          Just (EchoMessage echoRepNumber) -> do
+            sendMsg userMsg echoRepNumber
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
+          Just (RepeatNumberSuccess newRepNumber) -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
+            sendRepeatAcceptMsg chatId str
+            pure
+              ( SendMsgsResult
+                  updateId
+                  (filter (/= chatId) chatIdsForRepeatAcc)
+                  ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbersAcc)
+              )
+          Nothing -> do
+            printLog Release $
+              concat
+                ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
+            sendRepeatNumberErrorMsg chatId
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
+    )
+    (SendMsgsResult (UpdateId 0) chatIdsForRepeat repeatNumbersList)
+    userMessages
   where
     handle =
       Handle
