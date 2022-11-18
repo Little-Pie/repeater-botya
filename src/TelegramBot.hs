@@ -30,10 +30,18 @@ import Network.HTTP.Simple
     setRequestQueryString,
     setRequestResponseTimeout,
   )
+import Types.Bot
+  ( ChatId (..),
+    ChatIdsForRepeat,
+    Message,
+    Offset,
+    RepeatNumber,
+    RepeatNumbersList,
+    SendMsgsResult (..),
+    UpdateId (..),
+  )
 import Types.FromJSON (TelegramUpdates (..), UserMessage (..))
 import Types.ToJSON (KeyBoard (..), Keys (..), ReplyMarkup (..))
-
-type RepeatNumbers = [(Int, Int)]
 
 telegramUrl :: String
 telegramUrl = "https://api.telegram.org/bot"
@@ -49,10 +57,10 @@ botTokenCheck = do
 runTelegramBot :: App ()
 runTelegramBot = do
   botTokenCheck
-  telegramBotLoop 0 [] []
+  telegramBotLoop (UpdateId 0) [] []
 
-telegramBotLoop :: Int -> [Int] -> RepeatNumbers -> App ()
-telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
+telegramBotLoop :: Offset -> ChatIdsForRepeat -> RepeatNumbersList -> App ()
+telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
   telegramResponse <- getUpdates offset
   let mbUpdates = decodeStrict telegramResponse :: Maybe TelegramUpdates
   case mbUpdates of
@@ -60,11 +68,11 @@ telegramBotLoop offset chatIdsForRepeat repeatNumbers = do
       printLog Error "Couldn't parse telegramResponse"
       liftIO $ putStrLn "Couldn't parse telegramResponse"
     Just updates -> do
-      (newOffset, newChatIdsForRepeat, newRepeatNumbers) <- sendMsgs updates chatIdsForRepeat repeatNumbers
-      telegramBotLoop (newOffset + 1) newChatIdsForRepeat newRepeatNumbers
+      SendMsgsResult (UpdateId newOffset) newChatIdsForRepeat newRepeatNumbers <- sendMsgs updates chatIdsForRepeat repeatNumbersList
+      telegramBotLoop (UpdateId $ newOffset + 1) newChatIdsForRepeat newRepeatNumbers
 
-getUpdates :: Int -> App BS.ByteString
-getUpdates offset = do
+getUpdates :: Offset -> App BS.ByteString
+getUpdates (UpdateId offset) = do
   Environment {..} <- ask
   response <-
     liftIO $
@@ -78,11 +86,11 @@ getUpdates offset = do
                 [telegramUrl, token, "/getUpdates"]
   pure (getResponseBody response)
 
-sendMsg :: UserMessage -> Int -> App ()
+sendMsg :: UserMessage -> RepeatNumber -> App ()
 sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
-    TextMessage _ chatId msg -> do
+    TextMessage _ (ChatId chatId) msg -> do
       printLog Release $ concat ["[User]: ", msg]
       replicateM_ repNumber $ do
         printLog Release $ concat ["[Bot]: ", msg]
@@ -92,7 +100,7 @@ sendMsg userMsg repNumber = do
             $ parseRequestThrow_ $
               concat
                 [telegramUrl, token, "/sendMessage"]
-    StickerMessage _ chatId stickerId -> do
+    StickerMessage _ (ChatId chatId) stickerId -> do
       printLog Release $ concat ["[User]: *some sticker with id ", stickerId, "*"]
       replicateM_ repNumber $ do
         printLog Release $ concat ["[Bot]: *some sticker with id ", stickerId, "*"]
@@ -105,8 +113,8 @@ sendMsg userMsg repNumber = do
     NothingMessage _ _ -> do
       printLog Warning "Warning: User sent unknown type of message"
 
-sendHelpMsg :: Int -> App ()
-sendHelpMsg chatId = do
+sendHelpMsg :: ChatId -> App ()
+sendHelpMsg (ChatId chatId) = do
   Environment {..} <- ask
   void . liftIO $
     httpNoBody $
@@ -116,8 +124,8 @@ sendHelpMsg chatId = do
           concat
             [telegramUrl, token, "/sendMessage"]
 
-sendRepeatNumberErrorMsg :: Int -> App ()
-sendRepeatNumberErrorMsg chatId = do
+sendRepeatNumberErrorMsg :: ChatId -> App ()
+sendRepeatNumberErrorMsg (ChatId chatId) = do
   Environment {..} <- ask
   void . liftIO $
     httpNoBody $
@@ -127,8 +135,8 @@ sendRepeatNumberErrorMsg chatId = do
           concat
             [telegramUrl, token, "/sendMessage"]
 
-sendRepeatMsg :: Int -> App ()
-sendRepeatMsg chatId = do
+sendRepeatMsg :: ChatId -> App ()
+sendRepeatMsg (ChatId chatId) = do
   env@Environment {..} <- ask
   void . liftIO $
     httpBS $
@@ -149,8 +157,8 @@ sendRepeatMsg chatId = do
               repeatMessage
               (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
-sendRepeatAcceptMsg :: Int -> String -> App ()
-sendRepeatAcceptMsg chatId msg = do
+sendRepeatAcceptMsg :: ChatId -> Message -> App ()
+sendRepeatAcceptMsg (ChatId chatId) msg = do
   env@Environment {..} <- ask
   void . liftIO $
     httpBS $
@@ -168,15 +176,15 @@ sendRepeatAcceptMsg chatId msg = do
           encode $
             KeyBoard chatId (concat [repeatAcceptMessage, msg, " times"]) RemoveKeyboard
 
-sendMsgs :: TelegramUpdates -> [Int] -> RepeatNumbers -> App (Int, [Int], RepeatNumbers)
-sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
+sendMsgs :: TelegramUpdates -> ChatIdsForRepeat -> RepeatNumbersList -> App SendMsgsResult
+sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
   Environment {..} <- ask
   foldM
-    ( \(_, chatIdsForRepeatAcc, repeatNumbersAcc) userMsg -> do
+    ( \(SendMsgsResult _ chatIdsForRepeatAcc repeatNumbersAcc) userMsg -> do
         let chatId = getChatId userMsg
         let updateId = getUpdateId userMsg
         let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-        let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbers)
+        let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbersList)
         let str = fromMaybe "" (getMessage userMsg)
         result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
         case result of
@@ -185,34 +193,35 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
               concat
                 ["[User]: ", str, "\n [Bot]: ", helpMessage]
             sendHelpMsg chatId
-            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
           Just RepeatMessage -> do
             printLog Release $
               concat
                 ["[User]: ", str, "\n Bot]: ", repeatMessage]
             sendRepeatMsg chatId
-            pure (updateId, chatId : chatIdsForRepeatAcc, repeatNumbersAcc)
+            pure (SendMsgsResult updateId (chatId : chatIdsForRepeatAcc) repeatNumbersAcc)
           Just (EchoMessage echoRepNumber) -> do
             sendMsg userMsg echoRepNumber
-            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
           Just (RepeatNumberSuccess newRepNumber) -> do
             printLog Release $
               concat
                 ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
             sendRepeatAcceptMsg chatId str
             pure
-              ( updateId,
-                filter (/= chatId) chatIdsForRepeatAcc,
-                (chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbersAcc
+              ( SendMsgsResult
+                  updateId
+                  (filter (/= chatId) chatIdsForRepeatAcc)
+                  ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbersAcc)
               )
           Nothing -> do
             printLog Release $
               concat
                 ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
             sendRepeatNumberErrorMsg chatId
-            pure (updateId, chatIdsForRepeatAcc, repeatNumbersAcc)
+            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
     )
-    (0, chatIdsForRepeat, repeatNumbers)
+    (SendMsgsResult (UpdateId 0) chatIdsForRepeat repeatNumbersList)
     userMessages
   where
     handle =
@@ -220,17 +229,17 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbers = do
         { getString = getMessage
         }
 
-getChatId :: UserMessage -> Int
+getChatId :: UserMessage -> ChatId
 getChatId (TextMessage _ chatId _) = chatId
 getChatId (StickerMessage _ chatId _) = chatId
 getChatId (NothingMessage _ chatId) = chatId
 
-getUpdateId :: UserMessage -> Int
+getUpdateId :: UserMessage -> UpdateId
 getUpdateId (TextMessage updateId _ _) = updateId
 getUpdateId (StickerMessage updateId _ _) = updateId
 getUpdateId (NothingMessage updateId _) = updateId
 
-getMessage :: UserMessage -> Maybe String
+getMessage :: UserMessage -> Maybe Message
 getMessage (TextMessage _ _ str) = Just str
 getMessage (StickerMessage _ _ str) = Just str
 getMessage (NothingMessage _ _) = Nothing
