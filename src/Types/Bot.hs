@@ -26,5 +26,4 @@ data SendMsgsResult = SendMsgsResult
     repeatNumbersRes :: RepeatNumbersList
   }
 
-newtype RepeatNumbersList = RepeatNumbersList [RepeatNumbers]
-  deriving (Show)
+type RepeatNumbersList = [RepeatNumbers]
