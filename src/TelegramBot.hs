@@ -13,7 +13,6 @@ import qualified Data.ByteString.Char8 as BSC (pack)
 import qualified Data.ByteString.Lazy as LB (toStrict)
 import qualified Data.Map.Internal as Map
   ( empty,
-    filterWithKey,
     insert,
     lookup,
   )
@@ -218,7 +217,7 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
               ( SendMsgsResult
                   updateId
                   (filter (/= chatId) chatIdsForRepeatAcc)
-                  (Map.insert chatId newRepNumber $ Map.filterWithKey (\k _ -> k /= chatId) repeatNumbersAcc)
+                  (Map.insert chatId newRepNumber repeatNumbersAcc)
               )
           Nothing -> do
             printLog Release $
