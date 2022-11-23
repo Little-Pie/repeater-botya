@@ -3,29 +3,32 @@
 module Handle where
 
 import Control.Monad (mzero)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT)
+import Control.Monad.Trans.Reader (ReaderT, ask)
+import Environment (Environment (..))
 import Text.Read (readMaybe)
 
-newtype Handle msg = Handle
-  { getString :: msg -> Maybe String
+data Handle m msg = Handle
+  { getString :: msg -> Maybe String,
+    sendMessage :: msg -> Int -> MaybeT (ReaderT Environment m) (),
+    sendText :: String -> MaybeT (ReaderT Environment m) (),
+    sendRepeat :: String -> MaybeT (ReaderT Environment m) (),
+    sendRepeatAccept :: String -> String -> MaybeT (ReaderT Environment m) ()
   }
 
-data Result
-  = EchoMessage Int
-  | RepeatMessage
-  | HelpMessage
-  | RepeatNumberSuccess Int
-  deriving (Eq, Show)
-
-messagesHandle :: (Monad m) => Handle msg -> Bool -> Int -> msg -> MaybeT m (Bool, Result)
+messagesHandle :: (Monad m) => Handle m msg -> Bool -> Int -> msg -> MaybeT (ReaderT Environment m) (Bool, Int)
 messagesHandle Handle {..} isAskedForRepeat repNumber msg
   | isAskedForRepeat = do
-    res <- maybe mzero pure (getString msg)
-    number <- maybe mzero pure (readMaybe res)
+    Environment {..} <- lift ask
+    res <- maybe (sendText repeatNumberErrorMessage >> mzero) pure (getString msg)
+    number <- maybe (sendText repeatNumberErrorMessage >> mzero) pure (readMaybe res)
     if number > 0 && number < 6
-      then pure (False, RepeatNumberSuccess number)
-      else mzero
-  | otherwise = case getString msg of
-    Just "/help" -> pure (False, HelpMessage)
-    Just "/repeat" -> pure (True, RepeatMessage)
-    _ -> pure (False, EchoMessage repNumber)
+      then sendRepeatAccept repeatAcceptMessage res >> pure (False, number)
+      else sendText repeatNumberErrorMessage >> mzero
+  | otherwise = do
+    Environment {..} <- lift ask
+    case getString msg of
+      Just "/help" -> sendText helpMessage >> pure (False, repNumber)
+      Just "/repeat" -> sendRepeat repeatMessage >> pure (True, repNumber)
+      _ -> sendMessage msg repNumber >> pure (False, repNumber)

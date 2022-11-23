@@ -5,6 +5,7 @@ module TelegramBot where
 
 import Control.Monad (foldM, replicateM_, void)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (decodeStrict, encode)
@@ -18,7 +19,7 @@ import qualified Data.Map.Internal as Map
   )
 import Data.Maybe (fromMaybe)
 import Environment (App, Environment (..), LoggingLevel (..))
-import Handle (Handle (..), Result (..), messagesHandle)
+import Handle (Handle (..), messagesHandle)
 import Logging (printLog)
 import Network.HTTP.Client.Internal
   ( RequestBody (RequestBodyBS),
@@ -129,57 +130,57 @@ sendHelpMsg (ChatId chatId) = do
           concat
             [telegramUrl, token, "/sendMessage"]
 
-sendRepeatNumberErrorMsg :: ChatId -> App ()
-sendRepeatNumberErrorMsg (ChatId chatId) = do
+sendRepeatNumberErrorMsg :: String -> ChatId -> App ()
+sendRepeatNumberErrorMsg str (ChatId chatId) = do
   Environment {..} <- ask
   void . liftIO $
     httpNoBody $
       setRequestQueryString
-        [("chat_id", justBS $ show chatId), ("text", justBS repeatNumberErrorMessage)]
+        [("chat_id", justBS $ show chatId), ("text", justBS str)]
         $ parseRequestThrow_ $
           concat
             [telegramUrl, token, "/sendMessage"]
 
-sendRepeatMsg :: ChatId -> App ()
-sendRepeatMsg (ChatId chatId) = do
-  env@Environment {..} <- ask
+sendRepeatMsg :: ChatId -> String -> App ()
+sendRepeatMsg (ChatId chatId) str = do
+  Environment {..} <- ask
   void . liftIO $
     httpBS $
       addRequestHeader "Content-Type" "application/json" $
         setRequestBody
-          (body env)
+          body
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
                 concat [telegramUrl, token, "/sendMessage"]
           )
   where
-    body Environment {..} =
+    body =
       RequestBodyBS $
         LB.toStrict $
           encode $
             KeyBoard
               chatId
-              repeatMessage
+              str
               (ReplyMarkup [Text "1", Text "2", Text "3", Text "4", Text "5"])
 
-sendRepeatAcceptMsg :: ChatId -> Message -> App ()
-sendRepeatAcceptMsg (ChatId chatId) msg = do
-  env@Environment {..} <- ask
+sendRepeatAcceptMsg :: ChatId -> String -> Message -> App ()
+sendRepeatAcceptMsg (ChatId chatId) str msg = do
+  Environment {..} <- ask
   void . liftIO $
     httpBS $
       addRequestHeader "Content-Type" "application/json" $
         setRequestBody
-          (body env)
+          body
           ( setRequestMethod "POST" $
               parseRequestThrow_ $
                 concat [telegramUrl, token, "/sendMessage"]
           )
   where
-    body Environment {..} =
+    body =
       RequestBodyBS $
         LB.toStrict $
           encode $
-            KeyBoard chatId (concat [repeatAcceptMessage, msg, " times"]) RemoveKeyboard
+            KeyBoard chatId (concat [str, msg, " times"]) RemoveKeyboard
 
 sendMsgs :: TelegramUpdates -> ChatIdsForRepeat -> RepeatNumbersList -> App SendMsgsResult
 sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
@@ -191,47 +192,44 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
         let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
         let repNumber = fromMaybe repeatNumber (Map.lookup chatId repeatNumbersList)
         let str = fromMaybe "" (getMessage userMsg)
-        result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
+        result <- runMaybeT (messagesHandle (handle chatId str) isAskedForRepeat repNumber userMsg)
         case result of
-          Just HelpMessage -> do
-            printLog Release $
-              concat
-                ["[User]: ", str, "\n [Bot]: ", helpMessage]
-            sendHelpMsg chatId
-            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
-          Just RepeatMessage -> do
-            printLog Release $
-              concat
-                ["[User]: ", str, "\n Bot]: ", repeatMessage]
-            sendRepeatMsg chatId
+          Just (True, _newRepNumber) ->
             pure (SendMsgsResult updateId (chatId : chatIdsForRepeatAcc) repeatNumbersAcc)
-          Just (EchoMessage echoRepNumber) -> do
-            sendMsg userMsg echoRepNumber
-            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
-          Just (RepeatNumberSuccess newRepNumber) -> do
-            printLog Release $
-              concat
-                ["[User]: ", str, "\n Bot]: ", repeatAcceptMessage, show newRepNumber, " times"]
-            sendRepeatAcceptMsg chatId str
+          Just (False, newRepNumber) ->
             pure
               ( SendMsgsResult
                   updateId
                   (filter (/= chatId) chatIdsForRepeatAcc)
                   (Map.insert chatId newRepNumber repeatNumbersAcc)
               )
-          Nothing -> do
-            printLog Release $
-              concat
-                ["[User]: ", str, "\n Bot]: ", repeatNumberErrorMessage]
-            sendRepeatNumberErrorMsg chatId
-            pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
+          Nothing -> pure (SendMsgsResult updateId chatIdsForRepeatAcc repeatNumbersAcc)
     )
     (SendMsgsResult (UpdateId 0) chatIdsForRepeat repeatNumbersList)
     userMessages
   where
-    handle =
+    handle chatId str =
       Handle
-        { getString = getMessage
+        { getString = getMessage,
+          sendMessage = \message echoNum -> lift $ sendMsg message echoNum,
+          sendText = \text -> do
+            lift $
+              printLog Release $
+                concat
+                  ["[User]: ", str, "\n[Bot]: ", text]
+            lift $ sendRepeatNumberErrorMsg text chatId,
+          sendRepeat = \text -> do
+            lift $
+              printLog Release $
+                concat
+                  ["[User]: ", str, "\n[Bot]: ", text]
+            lift $ sendRepeatMsg chatId text,
+          sendRepeatAccept = \text newNum -> do
+            lift $
+              printLog Release $
+                concat
+                  ["[User]: ", newNum, "\n[Bot]: ", text, newNum, " times"]
+            lift $ sendRepeatAcceptMsg chatId text newNum
         }
 
 getChatId :: UserMessage -> ChatId

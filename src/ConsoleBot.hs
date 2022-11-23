@@ -4,10 +4,11 @@ module ConsoleBot where
 
 import Control.Monad (replicateM_)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (runMaybeT)
 import Control.Monad.Trans.Reader (ask)
 import Environment (App, Environment (..), LoggingLevel (..))
-import Handle as H (Handle (..), Result (..), messagesHandle)
+import Handle as H (Handle (..), messagesHandle)
 import Logging (printLog)
 
 consoleBotLoop :: App ()
@@ -24,32 +25,27 @@ consoleBotLoop = do
 
 handlingMessages :: Int -> Bool -> String -> App (Int, Bool)
 handlingMessages repNumber isAskedForRepeat msg = do
-  Environment {..} <- ask
   printLog Release $ "[User]: " ++ msg
   result <- runMaybeT $ messagesHandle handle isAskedForRepeat repNumber msg
   case result of
-    Just (newIsAskedForRepeat, HelpMessage) -> do
-      printLog Release $ "[Bot]: " ++ helpMessage
-      liftIO $ putStrLn helpMessage
-      pure (repNumber, newIsAskedForRepeat)
-    Just (newIsAskedForRepeat, RepeatMessage) -> do
-      printLog Release $ "[Bot]: " ++ repeatMessage
-      liftIO $ putStrLn repeatMessage
-      pure (repNumber, newIsAskedForRepeat)
-    Just (newIsAskedForRepeat, EchoMessage echoRepNumber) -> do
-      replicateM_ echoRepNumber $ printLog Release $ "[Bot]: " ++ msg
-      liftIO $ replicateM_ echoRepNumber $ putStrLn msg
-      pure (echoRepNumber, newIsAskedForRepeat)
-    Just (newIsAskedForRepeat, RepeatNumberSuccess newRepNumber) -> do
-      printLog Release $ "[Bot]: " ++ repeatAcceptMessage ++ show newRepNumber ++ " times"
-      liftIO $ putStrLn $ repeatAcceptMessage ++ show newRepNumber ++ " times"
+    Just (newIsAskedForRepeat, newRepNumber) ->
       pure (newRepNumber, newIsAskedForRepeat)
-    Nothing -> do
-      printLog Release $ "[Bot]: " ++ repeatNumberErrorMessage
-      liftIO $ putStrLn repeatNumberErrorMessage
+    Nothing ->
       pure (repNumber, isAskedForRepeat)
   where
     handle =
       Handle
-        { getString = Just
+        { getString = Just,
+          sendMessage = \message echoNum -> do
+            replicateM_ echoNum $ lift . printLog Release $ "[Bot]: " ++ message
+            liftIO $ replicateM_ echoNum $ putStrLn message,
+          sendText = \str -> do
+            lift . printLog Release $ "[Bot]: " ++ str
+            liftIO $ putStrLn str,
+          sendRepeat = \str -> do
+            lift . printLog Release $ "[Bot]: " ++ str
+            liftIO $ putStrLn str,
+          sendRepeatAccept = \str newNum -> do
+            lift . printLog Release $ "[Bot]: " ++ str ++ newNum ++ " times"
+            liftIO $ putStrLn $ str ++ newNum ++ " times"
         }
