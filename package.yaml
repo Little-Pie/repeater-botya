@@ -28,6 +28,7 @@ dependencies:
 - http-client
 - transformers
 - hspec
+- containers
 
 library:
   source-dirs: src

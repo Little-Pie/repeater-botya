@@ -11,6 +11,11 @@ import Data.Aeson (decodeStrict, encode)
 import qualified Data.ByteString as BS (ByteString)
 import qualified Data.ByteString.Char8 as BSC (pack)
 import qualified Data.ByteString.Lazy as LB (toStrict)
+import qualified Data.Map.Internal as Map
+  ( empty,
+    insert,
+    lookup,
+  )
 import Data.Maybe (fromMaybe)
 import Environment (App, Environment (..), LoggingLevel (..))
 import Handle (Handle (..), Result (..), messagesHandle)
@@ -57,7 +62,7 @@ botTokenCheck = do
 runTelegramBot :: App ()
 runTelegramBot = do
   botTokenCheck
-  telegramBotLoop (UpdateId 0) [] []
+  telegramBotLoop (UpdateId 0) [] Map.empty
 
 telegramBotLoop :: Offset -> ChatIdsForRepeat -> RepeatNumbersList -> App ()
 telegramBotLoop offset chatIdsForRepeat repeatNumbersList = do
@@ -184,7 +189,7 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
         let chatId = getChatId userMsg
         let updateId = getUpdateId userMsg
         let isAskedForRepeat = getChatId userMsg `elem` chatIdsForRepeat
-        let repNumber = fromMaybe repeatNumber (lookup chatId repeatNumbersList)
+        let repNumber = fromMaybe repeatNumber (Map.lookup chatId repeatNumbersList)
         let str = fromMaybe "" (getMessage userMsg)
         result <- fmap snd <$> runMaybeT (messagesHandle handle isAskedForRepeat repNumber userMsg)
         case result of
@@ -212,7 +217,7 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
               ( SendMsgsResult
                   updateId
                   (filter (/= chatId) chatIdsForRepeatAcc)
-                  ((chatId, read str :: Int) : filter (\a -> fst a /= chatId) repeatNumbersAcc)
+                  (Map.insert chatId newRepNumber repeatNumbersAcc)
               )
           Nothing -> do
             printLog Release $
