@@ -17,18 +17,25 @@ data Handle m msg = Handle
     sendRepeatAccept :: String -> String -> MaybeT (ReaderT Environment m) ()
   }
 
-messagesHandle :: (Monad m) => Handle m msg -> Bool -> Int -> msg -> MaybeT (ReaderT Environment m) (Bool, Int)
+data Result
+  = EchoMessage
+  | RepeatMessage
+  | HelpMessage
+  | RepeatNumberSuccess
+  deriving (Eq, Show)
+
+messagesHandle :: (Monad m) => Handle m msg -> Bool -> Int -> msg -> MaybeT (ReaderT Environment m) (Result, Bool, Int)
 messagesHandle Handle {..} isAskedForRepeat repNumber msg
   | isAskedForRepeat = do
     Environment {..} <- lift ask
     res <- maybe (sendText repeatNumberErrorMessage >> mzero) pure (getString msg)
     number <- maybe (sendText repeatNumberErrorMessage >> mzero) pure (readMaybe res)
     if number > 0 && number < 6
-      then sendRepeatAccept repeatAcceptMessage res >> pure (False, number)
+      then sendRepeatAccept repeatAcceptMessage res >> pure (RepeatNumberSuccess, False, number)
       else sendText repeatNumberErrorMessage >> mzero
   | otherwise = do
     Environment {..} <- lift ask
     case getString msg of
-      Just "/help" -> sendText helpMessage >> pure (False, repNumber)
-      Just "/repeat" -> sendRepeat repeatMessage >> pure (True, repNumber)
-      _ -> sendMessage msg repNumber >> pure (False, repNumber)
+      Just "/help" -> sendText helpMessage >> pure (HelpMessage, False, repNumber)
+      Just "/repeat" -> sendRepeat repeatMessage >> pure (RepeatMessage, True, repNumber)
+      _ -> sendMessage msg repNumber >> pure (EchoMessage, False, repNumber)

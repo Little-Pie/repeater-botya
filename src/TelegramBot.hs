@@ -194,9 +194,9 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
         let str = fromMaybe "" (getMessage userMsg)
         result <- runMaybeT (messagesHandle (handle chatId str) isAskedForRepeat repNumber userMsg)
         case result of
-          Just (True, _newRepNumber) ->
+          Just (_, True, _newRepNumber) ->
             pure (SendMsgsResult updateId (chatId : chatIdsForRepeatAcc) repeatNumbersAcc)
-          Just (False, newRepNumber) ->
+          Just (_, False, newRepNumber) ->
             pure
               ( SendMsgsResult
                   updateId
