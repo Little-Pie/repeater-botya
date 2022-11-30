@@ -97,9 +97,9 @@ sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
     TextMessage _ (ChatId chatId) msg -> do
-      printLog Release $ concat ["[User]: ", msg]
+      printLog Release ["[User]: " ++ msg]
       replicateM_ repNumber $ do
-        printLog Release $ concat ["[Bot]: ", msg]
+        printLog Release ["[Bot]: " ++ msg]
         (liftIO . httpNoBody) $
           setRequestQueryString
             [("chat_id", justBS $ show chatId), ("text", justBS msg)]
