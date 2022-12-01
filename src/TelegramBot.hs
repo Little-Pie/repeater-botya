@@ -97,9 +97,9 @@ sendMsg userMsg repNumber = do
   Environment {..} <- ask
   case userMsg of
     TextMessage _ (ChatId chatId) msg -> do
-      printLog Release ["[User]: " ++ msg]
+      printLog Release $ "[User]: " ++ msg
       replicateM_ repNumber $ do
-        printLog Release ["[Bot]: " ++ msg]
+        printLog Release $ "[Bot]: " ++ msg
         (liftIO . httpNoBody) $
           setRequestQueryString
             [("chat_id", justBS $ show chatId), ("text", justBS msg)]
@@ -194,9 +194,9 @@ sendMsgs (TelegramUpdates userMessages) chatIdsForRepeat repeatNumbersList = do
         let str = fromMaybe "" (getMessage userMsg)
         result <- runMaybeT (messagesHandle (handle chatId str) isAskedForRepeat repNumber userMsg)
         case result of
-          Just (True, _newRepNumber) ->
+          Just (_, True, _newRepNumber) ->
             pure (SendMsgsResult updateId (chatId : chatIdsForRepeatAcc) repeatNumbersAcc)
-          Just (False, newRepNumber) ->
+          Just (_, False, newRepNumber) ->
             pure
               ( SendMsgsResult
                   updateId

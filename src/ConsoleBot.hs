@@ -28,7 +28,7 @@ handlingMessages repNumber isAskedForRepeat msg = do
   printLog Release $ "[User]: " ++ msg
   result <- runMaybeT $ messagesHandle handle isAskedForRepeat repNumber msg
   case result of
-    Just (newIsAskedForRepeat, newRepNumber) ->
+    Just (_, newIsAskedForRepeat, newRepNumber) ->
       pure (newRepNumber, newIsAskedForRepeat)
     Nothing ->
       pure (repNumber, isAskedForRepeat)
